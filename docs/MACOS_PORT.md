@@ -271,7 +271,7 @@ PATH=~/.local/westplay-xwin-bin:$PATH cargo xwin check --workspace --exclude wes
 ```
 
 passes. **Not checked from here:** `westplay-app`, whose build (Tauri's, for its Windows icon and version) runs
-`llvm-rc`, which neither Xcode nor Rust's tools have (LLVM's own release has it: 1.5 GB). Their Windows code isn't changed in Phase 1. The tests
+`llvm-rc`, which neither Xcode nor Rust's tools have (LLVM's own release has it: 1.5 GB). Its Windows code isn't changed in Phase 1. The tests
 can't run here at all (Windows binaries); nor can the Windows-only tests (`#[cfg(windows)]`: the plain names,
 UAC, a loaded DLL in use, TruckersMP's paths).
 
