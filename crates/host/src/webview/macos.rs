@@ -421,6 +421,20 @@ fn uuid(id: [u8; 16]) -> Retained<NSUUID> {
     NSUUID::initWithUUIDString(NSUUID::alloc(), &NSString::from_str(&text)).unwrap_or_default()
 }
 
+/// Draws a WebView's page at one device pixel to a CSS pixel, as WebView2 draws WestPlay's (`SetRasterizationScale(1)`),
+/// whatever the display (WebKit's private `_setOverrideDeviceScaleFactor:`): the cabin page measures its boxes in
+/// device pixels (`devicePixelRatio`, the YouTube player's hole: 2 on a Retina display put it at twice its place), and
+/// the frame is 1280 x 720 whatever the display (drawn at 2x, four times the pixels were drawn, then shrunk).
+fn draw_at_1x(web_view: &WKWebView) {
+    let selector = objc2::sel!(_setOverrideDeviceScaleFactor:);
+    if web_view.respondsToSelector(selector) {
+        // SAFETY: WebKit's own method, taking a CGFloat, on its WebView.
+        let () = unsafe { msg_send![web_view, _setOverrideDeviceScaleFactor: 1.0f64] };
+    } else {
+        log!("WebKit has no _setOverrideDeviceScaleFactor: the cab is drawn at the display's scale");
+    }
+}
+
 /// Keeps a WebView drawing in a window that's out of sight (WebKit's private switch: docs/MACOS_PORT.md, Phase 2).
 pub(crate) fn keep_drawing(web_view: &WKWebView) {
     let selector = objc2::sel!(_setWindowOcclusionDetectionEnabled:);
@@ -447,7 +461,8 @@ pub(crate) struct Layer {
 
 /// What the stage and its WebViews share with the capture.
 pub(crate) struct StageShared {
-    pub window: MainThreadBound<Retained<NSWindow>>,
+    /// The window the WebViews are in, kept as long as the stage.
+    _window: MainThreadBound<Retained<NSWindow>>,
     pub root: MainThreadBound<Retained<NSView>>,
     /// The frame's size, and the page's (taller where it's squeezed into the frame: `set_page_height`).
     pub frame: (u32, u32),
@@ -513,7 +528,7 @@ impl Stage {
             (MainThreadBound::new(window, mtm), MainThreadBound::new(root, mtm))
         });
         let shared = Arc::new(StageShared {
-            window,
+            _window: window,
             root,
             frame: (width, height),
             page: Mutex::new((width, height)),
@@ -977,6 +992,7 @@ fn make_view(
         let () =
             msg_send![&*view, setValue: &*NSNumber::new_bool(false), forKey: &*NSString::from_str("drawsBackground")];
         keep_drawing(&view);
+        draw_at_1x(&view);
         (view, (navigation, messages, files))
     }
 }

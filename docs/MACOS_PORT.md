@@ -429,7 +429,14 @@ cabin page (Vite's dev server) in the macOS host, and read its frames back:
 - WestPlay holds media back while the game's window isn't showing (as on Windows): with a stand-in "game" with no
   window on screen the video was held, rightly.
 
-Not checked yet: whether the sound comes out (the owner's ears), signing in (Spotify, YouTube; a window on the owner's
+- **Sound**: YouTube's video heard from the Mac's speakers (owner, 2026-11-01).
+- **YouTube's mini player** (the video small in the cabin page's box): its box was put at twice its place. WebKit drew
+  the pages at the display's scale (2 on a Retina display: `devicePixelRatio` 2), and the cabin page measures the boxes
+  the host places the players in in device pixels, as WebView2 gives them at 1 (`SetRasterizationScale(1)`). WestPlay's
+  WebViews now draw at 1x whatever the display (WebKit's `_setOverrideDeviceScaleFactor:`, `scale.swift`: the page says
+  1, its snapshot is 1280 x 720 in 2 ms): the mini player plays in its box, and a quarter of the pixels are drawn.
+
+Not checked yet: signing in (Spotify, YouTube; a window on the owner's
 screen), YouTube Music, the Spotify player playing in the cabin, the cab speaker positioning.
 
 Note: the performance line counts only the app's own processor time when the host is run from a terminal (macOS makes

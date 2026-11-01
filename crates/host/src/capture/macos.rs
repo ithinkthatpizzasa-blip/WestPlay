@@ -184,7 +184,6 @@ fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(
     let (width, height) = stage.frame;
     let page_height = stage.page.lock().unwrap_or_else(|e| e.into_inner()).1.max(1);
     let squeeze = f64::from(height) / f64::from(page_height);
-    let scale = stage.window.get(mtm).backingScaleFactor();
     let layers: Vec<_> = {
         let layers = stage.layers.lock().unwrap_or_else(|e| e.into_inner());
         layers
@@ -238,7 +237,8 @@ fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(
         // until it calls it.
         unsafe {
             let config = WKSnapshotConfiguration::new(mtm);
-            config.setSnapshotWidth(Some(&NSNumber::new_f64(f64::from(page_width) / scale)));
+            // In points, which are the page's pixels: the WebViews draw at 1x (`webview::macos::draw_at_1x`).
+            config.setSnapshotWidth(Some(&NSNumber::new_f64(f64::from(page_width))));
             view.get(mtm).takeSnapshotWithConfiguration_completionHandler(Some(&config), &block);
         }
     }
