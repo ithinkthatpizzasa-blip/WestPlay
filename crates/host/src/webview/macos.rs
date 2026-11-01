@@ -67,9 +67,9 @@ pub const SCHEME: &str = "westplay";
 
 /// The pages' way to the host, as WebView2 gives it (`window.chrome.webview`): `postMessage` (to the host, as
 /// JSON) and the `message` event (from it, `post_json`). Under its own name on every page
-/// (`window.__westplayWebview`), and as `window.chrome.webview` on WestPlay's own pages only: a `window.chrome` on a
-/// service's page would tell it it's in Chrome (and its DRM, Widevine, which WebKit hasn't). WestPlay's scripts in
-/// the services' pages take either.
+/// (`window.__westplayWebview`), and as `window.chrome.webview` on WestPlay's own pages only (its scheme, the test
+/// page, the UI's development server on this Mac): a `window.chrome` on a service's page would tell it it's in Chrome
+/// (and its DRM, Widevine, which WebKit hasn't). WestPlay's scripts in the services' pages take either.
 pub const BRIDGE_SCRIPT: &str = r#"(() => {
   const handler = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.westplay;
   if (!handler || window.__westplayWebview) return;
@@ -83,7 +83,9 @@ pub const BRIDGE_SCRIPT: &str = r#"(() => {
   Object.defineProperty(window, '__westplayReceive', {
     value: (data) => target.dispatchEvent(new MessageEvent('message', { data })),
   });
-  if (location.protocol === 'westplay:' || location.protocol === 'about:') {
+  const own = location.protocol === 'westplay:' || location.protocol === 'about:' ||
+    location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (own) {
     window.chrome = window.chrome || {};
     window.chrome.webview = webview;
   }
@@ -460,6 +462,9 @@ impl StageShared {
     const WINDOW_WIDTH: f64 = 1600.0;
 }
 
+/// The stage window's opacity: as little as WebKit plays sound in (see `Stage::new`).
+const STAGE_OPACITY: f64 = 0.001;
+
 /// The frame the host's WebViews render onto, `width` x `height`.
 pub struct Stage {
     pub(crate) shared: Arc<StageShared>,
@@ -482,10 +487,12 @@ impl Stage {
                 );
                 window.setReleasedWhenClosed(false);
                 // On a display, for WebKit to take the wheel there (it does nothing with a scroll beyond every
-                // display), but never seen: transparent, the player's clicks through it, out of screenshots and
-                // screen sharing, on every Space, out of window cycling, at the desktop's own level.
+                // display), but never seen: all but transparent, the player's clicks through it, out of screenshots
+                // and screen sharing, on every Space, out of window cycling, at the desktop's own level. Not quite
+                // transparent: WebKit pauses a video with sound in a window of no opacity at all (it played at
+                // 0.001, which rounds to nothing on screen: tools/macos_probe/wkwebview/playback.swift).
                 window.setOpaque(false);
-                window.setAlphaValue(0.0);
+                window.setAlphaValue(STAGE_OPACITY);
                 window.setIgnoresMouseEvents(true);
                 window.setSharingType(objc2_app_kit::NSWindowSharingType::None);
                 window.setCollectionBehavior(

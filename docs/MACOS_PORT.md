@@ -405,3 +405,32 @@ writing to the bridge, until Phase 3's plugin), Spotify, YouTube and YouTube Mus
 WebViews, a profile each, signed in through the sign-in window), YouTube's player under the page, the cab speaker
 sound (`cab_sound.js`, `speakers.rs`), and the companion app (Phase 4: its pickers' window handles and one
 Windows-only process flag).
+
+### The cabin's apps, driven without the game (2026-11-01)
+
+A stand-in for the plugin (outside the repository: it writes the bridge as the plugin does, the interaction key held,
+mouse counts inverted from the host's own pointer curve, telemetry with the electrics on, the heartbeat) drove the real
+cabin page (Vite's dev server) in the macOS host, and read its frames back:
+
+- The host-drawn cursor lands where it's sent (640, 360 exactly); clicks open Home, Spotify, YouTube.
+- Spotify (signed out): its web player opened in its own WebKit view and profile, its real "Trending songs" in
+  WestPlay's Spotify app: the page script, the bridge and the host all work.
+- YouTube: search ("Trucking") gives YouTube's real results; a video plays, under the cabin page, captured into the
+  frame. Three things were found and fixed on the way:
+  - **WebKit pauses a video with sound in a window of no opacity** (`playback.swift`): the stage window is at opacity
+    0.001 (rounds to nothing on screen) instead of 0; at 0.001, 1 and beyond the displays, YouTube plays.
+  - **The bridge on the UI's dev server**: the cabin page there is `http://localhost:5173`, which the bridge didn't
+    take for WestPlay's own page (it showed its offline preview); it does now (localhost, 127.0.0.1).
+  - **YouTube's cookie consent**: Safari, and so WebKit, gets YouTube's "Before you continue" as a dialog over the
+    page, which the `SOCS` cookie set before loading doesn't keep away (checked: the cookie in the store, the dialog
+    still there), and the video waits behind it. `consent.js` now answers that dialog too, as Reject all (the button
+    whose action is YouTube's `disablePersonalizationAction`: Accept all's is `saveConsentAction`; no text read, so
+    any language), only in WestPlay's WebKit (Windows as it was). With a brand-new profile, the video plays.
+- WestPlay holds media back while the game's window isn't showing (as on Windows): with a stand-in "game" with no
+  window on screen the video was held, rightly.
+
+Not checked yet: whether the sound comes out (the owner's ears), signing in (Spotify, YouTube; a window on the owner's
+screen), YouTube Music, the Spotify player playing in the cabin, the cab speaker positioning.
+
+Note: the performance line counts only the app's own processor time when the host is run from a terminal (macOS makes
+the terminal, not the host, responsible for WebKit's processes then); to be checked in the companion app.
