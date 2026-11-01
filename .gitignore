@@ -27,3 +27,4 @@ dist/
 # Signing keys (the updater's private key stays with its owner, outside the repository)
 *.key
 /tools/macos_probe/*.dylib
+.DS_Store
