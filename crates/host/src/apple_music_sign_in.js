@@ -2,8 +2,11 @@
 // its own. The window is for signing in: the dialog opens at once (the page's own Sign In pressed), and once
 // the page is signed in (MusicKit, the page's own player, says so) this says it, nothing more of the account.
 ;(() => {
+  // The host's bridge: WebView2's (`window.chrome.webview`), or WestPlay's own in WebKit on macOS, which isn't put
+  // where a page would take it for Chrome's (crates/host/src/webview/macos.rs).
+  const westplayWebview = () => window.chrome?.webview ?? window.__westplayWebview
   if (location.hostname !== 'music.apple.com' || window.top !== window) return
-  const post = (message) => window.chrome?.webview?.postMessage(message)
+  const post = (message) => westplayWebview()?.postMessage(message)
   let opened = false
   const look = () => {
     let music = null

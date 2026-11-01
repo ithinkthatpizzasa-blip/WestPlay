@@ -12,8 +12,11 @@
 // are what the app shows (names, covers, what plays); of the account, only whether it's signed in and its
 // Apple Music profile's picture (to show on the account's button), never its name.
 ;(() => {
+  // The host's bridge: WebView2's (`window.chrome.webview`), or WestPlay's own in WebKit on macOS, which isn't put
+  // where a page would take it for Chrome's (crates/host/src/webview/macos.rs).
+  const westplayWebview = () => window.chrome?.webview ?? window.__westplayWebview
   if (location.hostname !== 'music.apple.com' || window.top !== window) return
-  const post = (message) => window.chrome?.webview?.postMessage(message)
+  const post = (message) => westplayWebview()?.postMessage(message)
 
   // --- How long playing takes, step by step: for the host's log, the kinds of steps and their times only
   // (Apple's requests by kind, the audio element's and MusicKit's own events), never addresses or contents.
@@ -1212,7 +1215,7 @@
     spectrum: (data) => cab?.spectrum(data.on),
   }
 
-  window.chrome?.webview?.addEventListener('message', ({ data }) => {
+  westplayWebview()?.addEventListener('message', ({ data }) => {
     if (CAB[data?.action]) CAB[data.action](data)
     else if (data?.action === 'ask') answer(data.id, data.question)
     else CONTROLS[data?.action]?.(data)?.catch?.(() => {})

@@ -18,8 +18,11 @@
 // address that holds the account's name (Liked Songs') leaves as `spotify:collection:tracks`. Signed in or
 // not is all that's said of the account.
 ;(() => {
+  // The host's bridge: WebView2's (`window.chrome.webview`), or WestPlay's own in WebKit on macOS, which isn't put
+  // where a page would take it for Chrome's (crates/host/src/webview/macos.rs).
+  const westplayWebview = () => window.chrome?.webview ?? window.__westplayWebview
   if (location.hostname !== 'open.spotify.com' || window.top !== window) return
-  const post = (message) => window.chrome?.webview?.postMessage(message)
+  const post = (message) => westplayWebview()?.postMessage(message)
   const pageFetch = window.fetch.bind(window)
 
   // --- How long playing takes, step by step: for the host's log, the kinds of steps and their times only
@@ -1173,7 +1176,7 @@
     spectrum: (data) => cab?.spectrum(data.on),
   }
 
-  window.chrome?.webview?.addEventListener('message', ({ data }) => {
+  westplayWebview()?.addEventListener('message', ({ data }) => {
     if (CAB[data?.action]) CAB[data.action](data)
     else if (data?.action === 'ask') answer(data.id, data.question)
     else CONTROLS[data?.action]?.(data)?.catch?.(() => {})

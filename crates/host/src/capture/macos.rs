@@ -2,8 +2,9 @@
 //! it's placed, the page squeezed into the frame where it's laid out taller), and published into the frame block
 //! the plugin reads (`westplay_shared::frames`), at most [`super::MAX_FPS`] a second (docs/MACOS_PORT.md, Phase 2).
 //!
-//! A frame the same as the last isn't published again (an idle screen costs the game nothing, as WGC sends frames
-//! only as the content changes). The screen's cursor is drawn here, over each frame as it goes out
+//! A frame the same as the last isn't published again (an idle screen costs the game little, as WGC sends frames
+//! only as the content changes), but the last goes out again every [`RESEND_IDLE`]: Windows' shared texture always
+//! holds the last frame for a game that starts, and the frame block holds it only until it's taken. The cursor is drawn here, over each frame as it goes out
 //! (`cursor::paint`), and over the last again as it moves.
 //!
 //! Threads: snapshots are taken and composited on the main thread (WebKit's), one round at a time, each round's
@@ -13,7 +14,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use block2::RcBlock;
 use dispatch2::DispatchQueue;
@@ -33,6 +34,9 @@ use westplay_shared::frames::{FrameWriter, FramesMapping};
 use super::{CURSOR_INTERVAL, FRAME_INTERVAL, FRAME_JITTER, Mailbox, flush};
 use crate::cursor::{self, Look};
 use crate::webview::{self, Stage, macos::StageShared};
+
+/// How often the last frame goes out again while none new comes: a game started meanwhile gets it.
+const RESEND_IDLE: Duration = Duration::from_millis(500);
 
 /// A composited frame: `width` x `height` BGRA, premultiplied, rows top first.
 type Pixels = Arc<Vec<u8>>;
@@ -110,10 +114,12 @@ impl Capture {
         if sent == Some(true) {
             self.sent(cursor, now);
         }
+        // The cursor moved or changed, and no new frame of the page's to take it, or none for a while: the last one
+        // again, with it.
+        let since = now.saturating_duration_since(self.cursor_at.get());
         if sent != Some(true)
             && self.clean.borrow().is_some()
-            && cursor != self.drawn.get()
-            && now.saturating_duration_since(self.cursor_at.get()) >= CURSOR_INTERVAL
+            && ((cursor != self.drawn.get() && since >= CURSOR_INTERVAL) || since >= RESEND_IDLE)
             && self.compose(cursor, squeeze)
         {
             self.sent(cursor, now);

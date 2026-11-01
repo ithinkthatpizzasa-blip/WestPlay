@@ -2,6 +2,9 @@
 // interface is hidden so only the video shows, the host drives its player and hears how it plays, and the
 // cabin page's YouTube app asks YouTube itself, through here, what to show (search, suggestions, Up next).
 (() => {
+  // The host's bridge: WebView2's (`window.chrome.webview`), or WestPlay's own in WebKit on macOS, which isn't put
+  // where a page would take it for Chrome's (crates/host/src/webview/macos.rs).
+  const westplayWebview = () => window.chrome?.webview ?? window.__westplayWebview
   if (location.hostname !== 'www.youtube.com') return
 
   // No ads, and no wait for one: YouTube holds a video back for most of the length of an ad it would have
@@ -458,7 +461,7 @@
       .map((more) => more && stringify(more).match(/"continuationCommand":\{"token":"([^"]+)"/)?.[1])
       .find(Boolean) ?? null
   const answer = async (command) => {
-    const reply = (fields) => window.chrome?.webview?.postMessage({ answer: command.id, ...fields })
+    const reply = (fields) => westplayWebview()?.postMessage({ answer: command.id, ...fields })
     try {
       switch (command.action) {
         case 'search': {
@@ -572,7 +575,7 @@
         avatar = image(header?.accountPhoto?.thumbnails, 88)
       } catch {}
     }
-    window.chrome?.webview?.postMessage({ account: { signedIn: signedIn(), avatar } })
+    westplayWebview()?.postMessage({ account: { signedIn: signedIn(), avatar } })
   }
 
   // The captions and the picture's quality, as chosen in the app, kept to on every video. Captions: the track
@@ -647,7 +650,7 @@
 
   // The truck's own speakers (cab_sound.js), playing the video's sound.
   const cab = window.westplayCabSound(() => document.querySelector('#movie_player video.html5-main-video'), (message) =>
-    window.chrome?.webview?.postMessage(message),
+    westplayWebview()?.postMessage(message),
   )
 
   // Commands that came before they could be carried out, in order.
@@ -751,9 +754,9 @@
         break
     }
   }
-  window.chrome?.webview?.addEventListener('message', (event) => run(event.data))
+  westplayWebview()?.addEventListener('message', (event) => run(event.data))
   // Here: the host sends what it held back for this page.
-  window.chrome?.webview?.postMessage({ ready: true })
+  westplayWebview()?.postMessage({ ready: true })
 
   // How it plays, for the host: a report when anything changes, and each second while playing.
   // Why a video hasn't started, for the host's log (2026-10-27: players' videos stayed loading, the log saying
@@ -930,7 +933,7 @@
     if (text !== last || (state === 1 && now - lastAt >= 1000) || (report.diag && now - lastAt >= 5000)) {
       last = text
       lastAt = now
-      window.chrome?.webview?.postMessage(report)
+      westplayWebview()?.postMessage(report)
     }
   }, 250)
 })()

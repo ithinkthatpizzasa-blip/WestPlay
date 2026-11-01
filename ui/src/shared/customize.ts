@@ -1,9 +1,11 @@
+import { hostFolder } from './hostFolder'
 import type { AppIconRole } from './icons'
 
 /**
  * The player's own wallpapers and icon sets (the companion's Customize), as the app lists them
  * (`westplay_host::customize`). Their files' paths are relative to WestPlay's `customize` folder, served to
- * the cabin page at `https://westplay.customize/` and to the companion at its own address.
+ * the cabin page at `https://westplay.customize/` (`westplay://` on macOS: `hostFolder`) and to the companion at
+ * its own address.
  */
 export interface Customizations {
   wallpapers: CustomWallpaper[]
@@ -31,7 +33,7 @@ export type IconStyle = 'auto' | 'light' | 'dark'
 export const NO_CUSTOMIZATIONS: Customizations = { wallpapers: [], iconSets: [] }
 
 /** Where the cabin page finds the player's files (the host maps the folder there). */
-export const CABIN_FILES = 'https://westplay.customize/'
+export const CABIN_FILES = `${hostFolder('westplay.customize')}/`
 /** Where the companion finds them (the app's `westplay-customize` scheme, as WebView2 addresses it). */
 export const COMPANION_FILES = 'http://westplay-customize.localhost/'
 
