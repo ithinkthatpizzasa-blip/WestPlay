@@ -348,3 +348,25 @@ into a pixel, so a capture can tell a fresh frame from a repeated one):
 | `SendMouseInput` | `NSEvent`s sent to the WebView: to prototype (the window is never key, out of sight) |
 | Process failure events | `webViewWebContentProcessDidTerminate:` |
 | Sign-in windows | A normal `NSWindow` on screen, on the service's data store |
+
+### The stage: layering, input, WestPlay's own scheme (`stage.swift`)
+
+Two WKWebViews in one window, a player (Apple's HLS sample) under a cabin page whose background is transparent
+(`drawsBackground` off) but for a sidebar and a framed hole:
+
+- **WestPlay's scheme**: the cabin page served by a `WKURLSchemeHandler` at `westplay://cabin/` loads, is a
+  **secure context** (`isSecureContext` true, `crypto.subtle` there), keeps `localStorage`, and `fetch`es from the
+  scheme.
+- **Layering**: each WebView's `takeSnapshot`, composited (the player, then the cabin page over it) into one
+  1280 × 720 sRGB frame: 63 frames/s, **0.8 ms** to composite each. The cabin page's snapshot keeps its
+  transparency (alpha 0 in the hole and around it, 235 in its 92%-opaque sidebar). Composite in sRGB, the
+  snapshots' own space (device RGB shifts the colours).
+- **Mouse**: `NSEvent`s made for the window and sent to the WebView (`mouseMoved:`, `mouseDown:`, `mouseUp:`)
+  reach the page at the right place (hover, click at 160, 340) in a window that is never key, wherever it is.
+- **The wheel doesn't scroll in a window beyond the displays**: a scroll event (`CGEvent` → `NSEvent`, lines or
+  pixels, sent to the WebView or through the window) carries its point in screen coordinates, and WebKit does
+  nothing with one beyond every display; the same events scroll on a display.
+- So the stage's window is **on a display but unseen**: `alphaValue` 0, `ignoresMouseEvents` (the player's clicks
+  go to what's under it), `sharingType = .none` (out of screenshots and screen sharing), on every Space, out of
+  window cycling, at the desktop's level. There it draws, takes hover, clicks and the wheel, and is captured at 63
+  frames/s as above (it counts as not visible to AppKit, and WebKit draws on with occlusion detection off).
