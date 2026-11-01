@@ -256,9 +256,22 @@ Checked on this Mac (the ignored tests, run by hand):
 
 `cargo check --workspace --exclude westplay-app --exclude westplay-plugin --all-targets --target
 x86_64-pc-windows-msvc` passes (shared, mapdata, setup, host, their tests included), and clippy shows nothing in
-the files changed. **Not checked from here:** `westplay-plugin` (MinHook) and `westplay-app` (`ring`, through
-the updater) compile C code for Windows, which needs Microsoft's Windows SDK and C runtime headers (`cargo-xwin`
-can fetch them; it asks to accept Microsoft's licence). Their Windows code isn't changed in Phase 1. The tests
+the files changed.
+
+The plugin too, with `cargo-xwin` (Microsoft's C runtime and Windows SDK headers, fetched by it, its licence
+accepted by the owner, 2026-11-01), compiling MinHook's C with Apple's own `clang`, and `llvm-lib` taken from
+Rust's `llvm-tools` (its `llvm-ar`, which works as `llvm-lib` when named so):
+
+```sh
+rustup component add llvm-tools
+mkdir -p ~/.local/westplay-xwin-bin
+ln -sf "$(find ~/.rustup/toolchains/stable-aarch64-apple-darwin -name llvm-ar -type f)" ~/.local/westplay-xwin-bin/llvm-lib
+PATH=~/.local/westplay-xwin-bin:$PATH cargo xwin check --workspace --exclude westplay-app --all-targets \
+    --target x86_64-pc-windows-msvc --cross-compiler clang
+```
+
+passes. **Not checked from here:** `westplay-app`, whose build (Tauri's, for its Windows icon and version) runs
+`llvm-rc`, which neither Xcode nor Rust's tools have (LLVM's own release has it: 1.5 GB). Their Windows code isn't changed in Phase 1. The tests
 can't run here at all (Windows binaries); nor can the Windows-only tests (`#[cfg(windows)]`: the plain names,
 UAC, a loaded DLL in use, TruckersMP's paths).
 
