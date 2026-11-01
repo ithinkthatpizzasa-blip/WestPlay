@@ -281,3 +281,70 @@ UAC, a loaded DLL in use, TruckersMP's paths).
 Other notes:
 - This toolchain's clippy (1.99) suggests `as_chunks` in some files not touched here (mapdata, `tablet.rs`):
   left as they are.
+
+## Phase 2: the host's web engine (2026-11-01)
+
+**Decision: WKWebView** (the system's WebKit, Safari's engine), drawn in a window kept beyond the displays and
+captured with `takeSnapshot`. CEF is ruled out on evidence (below), without a prototype of its own.
+
+### What was measured (`tools/macos_probe/wkwebview/`, on this Mac)
+
+`capture.swift` (a 1280 × 720 WKWebView; its page counts its `requestAnimationFrame`s and paints its frame number
+into a pixel, so a capture can tell a fresh frame from a repeated one):
+
+| Where the window is | Page visibility | Page frames/s | Captured fresh frames/s |
+|---|---|---|---|
+| Beyond the displays (`-20000, -20000`), ordered in, **occlusion detection off** | visible | 60 | 60 |
+| Beyond the displays, occlusion detection on (WebKit's default) | hidden | 0 | — |
+| Ordered out (hidden) | hidden | 0 | — |
+
+- WebKit stops drawing a page whose window it thinks is out of sight; its private
+  `-[WKWebView _setWindowOcclusionDetectionEnabled:NO]` keeps it drawing. WestPlay depends on it (a private API:
+  fine outside the App Store, to be checked on each macOS).
+- `takeSnapshot` with `snapshotWidth` 1280 points / the backing scale: 1280 × 720 frames, every one of the page's
+  60 a second, its pixels read in about 0.4 ms. **No Screen Recording permission** (ScreenCaptureKit would need it).
+  (Without `snapshotWidth` it gives the Retina size, 2560 × 1440, and the first snapshots can be stale.)
+- Video in the capture: Apple's public HLS sample (`video.html`) played in the window beyond the displays and was
+  captured at 54 fresh frames/s, its picture whole.
+- What the engine offers (EME, `canPlayType`): FairPlay (`com.apple.fps`, `com.apple.fps.1_0`, `com.apple.fps.2_0`,
+  and WebKit's own `WebKitMediaKeys`) and Clear Key; **no Widevine**; MSE and Managed MSE; AAC, Opus, VP9, H.264.
+
+`service.swift` (a service's page in a WKWebView as WestPlay would host it: a profile of its own from
+`WKWebsiteDataStore(forIdentifier:)`, Safari's user agent, occlusion detection off):
+
+- **Spotify plays** (owner, 2026-11-01): signed in to open.spotify.com, played "on this web browser" (Spotify's
+  own device, its FairPlay; first the page had been playing to the Spotify app as a remote, which proves nothing,
+  then switched). With the window moved beyond the displays the music kept playing (owner heard it), the page
+  stayed visible, its Canvas video played on, and the page was captured at ~20 fresh frames/s (its Canvas loop's
+  rate).
+- **Apple Music: not tested.** The owner doesn't use it (2026-11-01), so it wasn't signed in to. Its web player
+  is FairPlay in Safari, as Spotify's is here, but that it plays in WestPlay's WKWebView isn't proved.
+- **Protected video in the capture: not tested.** A FairPlay video (Apple Music's music videos; Spotify's "Switch
+  to video") may come out black in `takeSnapshot`, as it does in screen captures. Still to check (Spotify's video
+  can show it, signed in as above).
+
+### Why not CEF
+
+- Stock CEF builds have no proprietary codecs: no H.264 or AAC without a custom Chromium build with
+  `proprietary_codecs`/`ffmpeg_branding=Chrome`, and the patent licences that go with it
+  ([chromiumembedded/cef#3559](https://github.com/chromiumembedded/cef/issues/3559),
+  [cefpython's notes](https://github.com/zofuthan/cefpython/wiki/AudioVideo)).
+- No Widevine: CEF doesn't fetch the CDM; an app supplies and registers it
+  ([CefSharp#1934](https://github.com/cefsharp/CefSharp/issues/1934)), and Widevine in an app of one's own needs
+  Google's agreement. Spotify's web player in Chromium plays through Widevine; Apple Music's too. So stock CEF can't
+  play either, and the brief's reason to try it (closest to WebView2) doesn't outweigh that.
+- Spotify supports Safari ([Spotify's help](https://support.spotify.com/us/article/webplayer/)), which is the
+  engine WKWebView is, and was seen playing in it above.
+
+### How the host maps onto it (plan)
+
+| Windows (WebView2) | macOS (WKWebView) |
+|---|---|
+| `Stage`: a Windows.UI.Composition visual tree, never in a window | One borderless `NSWindow` beyond the displays, ordered in; each WebView an `NSView` in it, in order (the cabin page on top); the page squeezed into the frame by a layer transform |
+| Windows Graphics Capture of the stage's visual | `takeSnapshot` of each WebView shown, composited into the frame (the cabin page over the players, its transparent hole showing them): to prototype, with the cabin page's background transparent (`drawsBackground` off) |
+| The shared D3D11 texture | The frame block (`westplay_shared::frames`) |
+| A WebView2 profile folder per service | `WKWebsiteDataStore(forIdentifier:)`, a UUID derived from the service's name |
+| `SetVirtualHostNameToFolderMapping` (`https://westplay.cabin/`) | A `WKURLSchemeHandler` (WKWebView can't serve `https:` itself): a scheme of WestPlay's own; to check the page is a secure context there |
+| `SendMouseInput` | `NSEvent`s sent to the WebView: to prototype (the window is never key, out of sight) |
+| Process failure events | `webViewWebContentProcessDidTerminate:` |
+| Sign-in windows | A normal `NSWindow` on screen, on the service's data store |

@@ -1,0 +1,6 @@
+<html><body style="margin:0;background:#000">
+<video id=v autoplay muted playsinline style="width:1280px;height:720px"
+ src="https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8"></video>
+<script>
+setInterval(() => window.webkit.messageHandlers.probe.postMessage({t: v.currentTime, paused: v.paused, ready: v.readyState, w: v.videoWidth}), 1000);
+</script></body></html>
