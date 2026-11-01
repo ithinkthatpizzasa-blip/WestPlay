@@ -152,7 +152,7 @@ the camera turning).
 TruckersMP has no macOS client: it runs only with the Windows game (also under Wine/Proton on Linux). The only
 Mac route found is an unofficial launcher whose own page says it's not maintained and not affiliated with
 TruckersMP. So `crates/plugin/src/truckersmp.rs`, `crates/setup/src/truckersmp.rs` and the map's other players
-have nothing to work with on a Mac game; they'll be compiled out on macOS (Windows unchanged), and the
+have nothing to work with on a Mac game. On macOS setup never finds a TruckersMP installation (Phase 1), the
 companion won't show TruckersMP there.
 
 Sources: [unofficial TruckersMP macOS launcher](https://github.com/matyash12/unofficial-truckersmp-macos-launcher),
@@ -175,7 +175,7 @@ Sources: [unofficial TruckersMP macOS launcher](https://github.com/matyash12/uno
    device works well enough that players use it.
 3. **The game's code** (navigation, camera) has to be found again in the 1.57 Mac executable, and the game's data
    (GPS scripts, trucks) checked against 1.57.
-4. **TruckersMP** compiled out on macOS.
+4. **TruckersMP** never found on macOS (setup has no TruckersMP folder there; the plugin's part in Phase 3).
 5. **The route** read inside the game by the plugin, not from outside.
 
 ### Still open from Phase 0
@@ -184,3 +184,84 @@ Sources: [unofficial TruckersMP macOS launcher](https://github.com/matyash12/uno
 - Which thread draws, and whether the CGL context on the SDK's frame events is the drawing one (frame events
   need a profile loaded and driving: the owner, or the next in-game session).
 - `sdk reload` / `sdk unload` in the console (Phase 3, with the real plugin).
+
+## Phase 1: portable foundations (2026-11-01)
+
+Done, and run on this Mac. `cargo test -p westplay-shared -p westplay-mapdata -p westplay-setup`: 30 + 163 + 71
+tests pass (8 more, which look at this Mac's own game, run by hand: below).
+
+### The bridge (`crates/shared/src/platform`)
+
+- `platform::Region`: named shared memory, Windows' `CreateFileMappingW` (moved, unchanged) or macOS's
+  `shm_open` + `ftruncate` + `mmap`. `BridgeMapping::open/bridge/matches` are as they were; `open`'s error is the
+  OS's (`windows::core::Error` on Windows, as before; `io::Error` on macOS).
+- Names: `Local\WestPlay.Bridge.v24` on Windows (unchanged), `/WestPlay.Bridge.v24` on macOS. macOS takes at
+  most 31 bytes (`PSHMNAMLEN`); tests check WestPlay's names leave room for a version up to six digits longer.
+- **Fresh when no one holds it**, as on Windows: macOS keeps POSIX shared memory until it's unlinked (through
+  crashes), where Windows frees a mapping with its last handle. Each holder keeps a shared `flock` on
+  `<user temp>/WestPlay.Bridge.v24.holders` while mapped (dropped with the process however it ends); an opener
+  that can lock it exclusively is alone and unlinks the old object first. A second lock (`….open`), held only
+  while opening, keeps two openers from both thinking they're alone. The lock folder is
+  `confstr(_CS_DARWIN_USER_TEMP_DIR)`, the same for the game and the app whatever their environments.
+- Checked across architectures: an x86_64 process under Rosetta (as the game is) and a native arm64 one (the
+  app) see each other's writes, `SeqLock` strings included, and once both are gone the next opener gets a new,
+  zeroed bridge.
+
+### Frames on macOS (`crates/shared/src/frames.rs`)
+
+A block of its own, `/WestPlay.Frames.v24`: three slots of 1280 × 720 BGRA (3.5 MiB each), a slot index for
+the newest (with a "new" bit) and which slot each side holds. The app writes into its slot and swaps it in as the
+newest; the plugin swaps the newest for the one it's done with. Neither waits, ever; a frame the plugin didn't
+take is written over. A side that starts again takes the slot neither of the others hold. Tests: newest frame
+once, slots always shared out, restart, a writer thread and a reader never seeing a torn frame (2000 frames).
+Upgrading to a cross-process IOSurface is left for Phase 3, if the copy shows up in the frame time.
+
+### Map data
+
+`cargo test -p westplay-mapdata`: 163 pass, unchanged. Read from the Mac game's own 1.57 archives (110 mounted
+in 0.16 s), the map around Berlin (15 km) exported in 11 s: 629 000 items, 0 missing prefabs, 0 unrouted roads.
+
+### Setup (`crates/setup/src/platform`)
+
+The OS's parts moved behind `platform` (Windows' moved unchanged; `pick.rs` to `platform/windows/pick.rs`):
+
+| | Windows | macOS |
+|---|---|---|
+| "Documents" (the game's folder's home; WestPlay's own folder) | Known Folder | `~/Library/Application Support` (not `~/Documents`: macOS asks each program's leave for that, the game's too) |
+| Steam | registry | `~/Library/Application Support/Steam` |
+| Other installs | registry's installed programs | none (the Mac game is Steam's; another folder can be chosen) |
+| Executable | `bin/win_x64/eurotrucks2.exe` | `Euro Truck Simulator 2.app/Contents/MacOS/eurotrucks2` |
+| Version | the executable's version resource | `version.scs`'s `version.sii` (`version: "1.57.2.7"`); the `.app`'s own version (1.22.2) isn't the game's |
+| Game running | ToolHelp snapshot | `proc_listallpids` + `proc_pidpath` |
+| Plugin | `bin/win_x64/plugins/westplay.dll` | `…/Contents/MacOS/plugins/westplay.dylib`, quarantine removed, ad-hoc signed if it isn't signed |
+| Uninstall | removes the file | removes the file, and the `plugins` folder if that leaves it empty (the `.app` as it was) |
+| Administrator rights | UAC (`runas`) | macOS's password prompt (`osascript … with administrator privileges`); only for a library an administrator owns |
+| Pickers | `IFileOpenDialog` | `NSOpenPanel` (`rfd`, shown on the main thread) |
+| TruckersMP | `%APPDATA%\TruckersMP` | none |
+
+Checked on this Mac (the ignored tests, run by hand):
+- The game found: Steam's, version 1.57.2.7, 102 DLCs, its Workshop folder.
+- Profiles: three, in Steam Cloud, the selected one ("Nirav Karnik", from `game.log.txt`), their mods (ProMods
+  2.77 and Workshop mods), which matter to the map.
+- Installing a real x86_64 dylib, unsigned and in quarantine: it lands signed and out of quarantine, and
+  uninstalling leaves no `plugins` folder (another plugin there keeps it).
+- **The plugin must be shipped signed**: setup tells the installed plugin current by its bytes, and signing it on
+  the way in changes them (seen as "another version"). The build signs it (Phase 3/4); then the copy is the same.
+- WestPlay's screen mod built from this game: patched the stock 7" screen (`generic`), DAF 2021, both Scania
+  2025, Iveco S-Way, Volvo FH, the tablet and the toy GPS (`setra-516`). Not found: `renault-t-2024` (the
+  Renault T 2024 isn't in 1.57: the README's list of trucks differs on the Mac), and Oyuncuyusbis' coaches
+  (mods not installed here).
+
+### Windows
+
+`cargo check --workspace --exclude westplay-app --exclude westplay-plugin --all-targets --target
+x86_64-pc-windows-msvc` passes (shared, mapdata, setup, host, their tests included), and clippy shows nothing in
+the files changed. **Not checked from here:** `westplay-plugin` (MinHook) and `westplay-app` (`ring`, through
+the updater) compile C code for Windows, which needs Microsoft's Windows SDK and C runtime headers (`cargo-xwin`
+can fetch them; it asks to accept Microsoft's licence). Their Windows code isn't changed in Phase 1. The tests
+can't run here at all (Windows binaries); nor can the Windows-only tests (`#[cfg(windows)]`: the plain names,
+UAC, a loaded DLL in use, TruckersMP's paths).
+
+Other notes:
+- This toolchain's clippy (1.99) suggests `as_chunks` in some files not touched here (mapdata, `tablet.rs`):
+  left as they are.

@@ -1,5 +1,6 @@
 //! WestPlay's game plugin (`westplay.dll`), in the game's `bin/win_x64/plugins` folder, where the game loads
-//! SDK plugins from (and TruckersMP's client too).
+//! SDK plugins from (and TruckersMP's client too). On macOS, `westplay.dylib` in the `plugins` folder inside the
+//! game's `.app`, taken out of quarantine and signed as it's put there (`platform::prepare_plugin`).
 //!
 //! Installing writes the new plugin beside the one there, then moves it over it, so the game never finds
 //! half a file. Two things can stand in the way, and each is told apart: the game running (it holds the
@@ -10,16 +11,11 @@
 use std::io;
 use std::path::{Path, PathBuf};
 
-use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, WAIT_OBJECT_0};
-use windows::Win32::System::Threading::{GetExitCodeProcess, INFINITE, WaitForSingleObject};
-use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
-use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
-use windows::core::{HSTRING, PCWSTR, w};
-
 use crate::game::Game;
+use crate::platform;
 
 /// The plugin's file, in the game's plugins folder.
-pub const FILE_NAME: &str = "westplay.dll";
+pub const FILE_NAME: &str = platform::PLUGIN_FILE;
 /// The argument WestPlay is started with, as administrator, to copy the plugin and nothing else.
 const COPY_ARGUMENT: &str = "--westplay-install-plugin";
 /// The same, to remove it and nothing else (uninstalling).
@@ -29,9 +25,9 @@ const REMOVE_ARGUMENT: &str = "--westplay-remove-plugin";
 const ERROR_SHARING_VIOLATION: i32 = 32;
 const ERROR_LOCK_VIOLATION: i32 = 33;
 /// Exit codes of the copy run as administrator.
-const EXIT_COPIED: u32 = 0;
-const EXIT_IN_USE: u32 = 2;
-const EXIT_FAILED: u32 = 1;
+pub(crate) const EXIT_COPIED: u32 = 0;
+pub(crate) const EXIT_IN_USE: u32 = 2;
+pub(crate) const EXIT_FAILED: u32 = 1;
 
 /// The plugin in a game, against WestPlay's own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,6 +133,7 @@ fn remove_from(plugins: &Path) -> Result<(), InstallError> {
             Err(error) => return Err(error.into()),
         }
     }
+    platform::tidy_plugins_dir(plugins);
     Ok(())
 }
 
@@ -152,6 +149,10 @@ fn copy_into(ours: &Path, plugins: &Path) -> Result<PathBuf, InstallError> {
     std::fs::create_dir_all(plugins)?;
     let partial = plugins.join(format!("{FILE_NAME}.partial"));
     std::fs::copy(ours, &partial)?;
+    if let Err(error) = platform::prepare_plugin(&partial) {
+        let _ = std::fs::remove_file(&partial);
+        return Err(error.into());
+    }
     if let Err(error) = std::fs::rename(&partial, &target) {
         let _ = std::fs::remove_file(&partial);
         return Err(error.into());
@@ -160,50 +161,15 @@ fn copy_into(ours: &Path, plugins: &Path) -> Result<PathBuf, InstallError> {
 }
 
 /// Installs the plugin with administrator rights: WestPlay starts itself again with them (Windows asks the
-/// player), copies the plugin, and ends; this waits for it.
+/// player; on macOS, its own prompt for an administrator's password), copies the plugin, and ends; this waits
+/// for it.
 pub fn install_as_administrator(game: &Game, ours: &Path) -> Result<(), InstallError> {
-    as_administrator(format!("{COPY_ARGUMENT} {} {}", quoted(ours), quoted(&game.plugins_dir())))
+    platform::as_administrator(&[ours, &game.plugins_dir()], COPY_ARGUMENT)
 }
 
 /// Removes the plugin with administrator rights, as [`install_as_administrator`] copies it.
 pub fn uninstall_as_administrator(game: &Game) -> Result<(), InstallError> {
-    as_administrator(format!("{REMOVE_ARGUMENT} {}", quoted(&game.plugins_dir())))
-}
-
-/// WestPlay started again with administrator rights and `arguments` (Windows asks the player), waited for.
-fn as_administrator(arguments: String) -> Result<(), InstallError> {
-    let exe = std::env::current_exe()?;
-    let (exe, arguments) = (HSTRING::from(exe.as_os_str()), HSTRING::from(arguments));
-    let mut info = SHELLEXECUTEINFOW {
-        cbSize: size_of::<SHELLEXECUTEINFOW>() as u32,
-        fMask: SEE_MASK_NOCLOSEPROCESS,
-        lpVerb: w!("runas"),
-        lpFile: PCWSTR(exe.as_ptr()),
-        lpParameters: PCWSTR(arguments.as_ptr()),
-        nShow: SW_HIDE.0,
-        ..Default::default()
-    };
-    // SAFETY: `info` is complete and its strings live through the call.
-    if let Err(error) = unsafe { ShellExecuteExW(&mut info) } {
-        return Err(if error.code() == ERROR_CANCELLED.to_hresult() {
-            InstallError::Declined
-        } else {
-            InstallError::Io(io::Error::other(error))
-        });
-    }
-    let mut code = EXIT_FAILED;
-    // SAFETY: the process handle came from the call above (`SEE_MASK_NOCLOSEPROCESS`) and is closed once.
-    unsafe {
-        if WaitForSingleObject(info.hProcess, INFINITE) == WAIT_OBJECT_0 {
-            let _ = GetExitCodeProcess(info.hProcess, &mut code);
-        }
-        let _ = CloseHandle(info.hProcess);
-    }
-    match code {
-        EXIT_COPIED => Ok(()),
-        EXIT_IN_USE => Err(InstallError::InUse),
-        _ => Err(InstallError::Io(io::Error::other("the plugin couldn't be copied or removed"))),
-    }
+    platform::as_administrator(&[&game.plugins_dir()], REMOVE_ARGUMENT)
 }
 
 /// For WestPlay's `main`, first thing: when it was started to copy (or remove) the plugin as administrator,
@@ -222,11 +188,6 @@ pub fn run_as_administrator_copy(args: &[String]) -> Option<i32> {
         Err(_) => EXIT_FAILED,
     };
     Some(code as i32)
-}
-
-/// A path as one command-line argument.
-fn quoted(path: &Path) -> String {
-    format!("\"{}\"", path.display())
 }
 
 #[cfg(test)]
@@ -280,10 +241,12 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    #[cfg(windows)]
     #[test]
     fn says_so_while_the_game_holds_the_plugin() {
         use windows::Win32::Foundation::FreeLibrary;
         use windows::Win32::System::LibraryLoader::LoadLibraryW;
+        use windows::core::HSTRING;
         let (game, ours, root) = setup("in-use");
         // Loaded as the game loads a plugin (a real DLL: Windows' own small version.dll, copied in under the
         // plugin's name), which no file lock stands in for: Windows lets a loaded DLL be opened to append.

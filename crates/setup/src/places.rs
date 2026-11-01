@@ -1,39 +1,21 @@
 //! Where things are on the player's PC: their Documents folder, Steam's folder and its libraries, and the
-//! programs Windows lists as installed.
+//! programs Windows lists as installed. On macOS, the game's "Documents" is `~/Library/Application Support`,
+//! where it keeps its own folder (the OS's own parts: `platform`).
 
 use std::path::{Path, PathBuf};
 
-use windows::Win32::Foundation::ERROR_SUCCESS;
-use windows::Win32::System::Com::CoTaskMemFree;
-use windows::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_SZ, RegCloseKey, RegEnumKeyExW, RegGetValueW,
-    RegOpenKeyExW,
-};
-use windows::Win32::UI::Shell::{FOLDERID_Documents, FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
-use windows::core::{HSTRING, PCWSTR, PWSTR, w};
+use crate::{platform, vdf};
 
-use crate::vdf;
-
-/// The player's Documents folder, wherever it is (it may be moved, to OneDrive say).
+/// The player's Documents folder, wherever it is (it may be moved, to OneDrive say). On macOS, the folder the
+/// game keeps its own in instead: `~/Library/Application Support`.
 pub fn documents() -> Option<PathBuf> {
-    // SAFETY: Windows hands back a CoTaskMem string, read before it's freed here.
-    unsafe {
-        let path = SHGetKnownFolderPath(&FOLDERID_Documents, KF_FLAG_DEFAULT, None).ok()?;
-        let result = path.to_string().ok().map(PathBuf::from);
-        CoTaskMemFree(Some(path.0 as *const _));
-        result
-    }
+    platform::documents()
 }
 
-/// The player's roaming application data folder (`%APPDATA%`), where TruckersMP installs itself.
+/// The player's roaming application data folder (`%APPDATA%`), where TruckersMP installs itself (none on macOS,
+/// where there's no TruckersMP).
 pub fn roaming() -> Option<PathBuf> {
-    // SAFETY: Windows hands back a CoTaskMem string, read before it's freed here.
-    unsafe {
-        let path = SHGetKnownFolderPath(&FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, None).ok()?;
-        let result = path.to_string().ok().map(PathBuf::from);
-        CoTaskMemFree(Some(path.0 as *const _));
-        result
-    }
+    platform::roaming()
 }
 
 /// The game's folder's name in Documents.
@@ -138,11 +120,10 @@ fn choose_game_documents(folders: &[PathBuf]) -> Option<PathBuf> {
 }
 
 /// Steam's folder, as Steam records it (for this user, else for the machine), named as Windows names it:
-/// Steam keeps it lowercase with forward slashes (`c:/program files (x86)/steam`).
+/// Steam keeps it lowercase with forward slashes (`c:/program files (x86)/steam`). On macOS, in the user's
+/// Application Support.
 pub fn steam() -> Option<PathBuf> {
-    let path = registry_text(HKEY_CURRENT_USER, w!("Software\\Valve\\Steam"), w!("SteamPath"))
-        .or_else(|| registry_text(HKEY_LOCAL_MACHINE, w!("SOFTWARE\\WOW6432Node\\Valve\\Steam"), w!("InstallPath")))
-        .map(PathBuf::from)?;
+    let path = platform::steam()?;
     path.is_dir().then(|| windows_name(&path))
 }
 
@@ -199,71 +180,9 @@ pub fn library_paths(text: &str) -> Vec<PathBuf> {
 }
 
 /// Every program Windows lists as installed (for this user and the machine, 64- and 32-bit): its name and
-/// where it's installed, when it says.
+/// where it's installed, when it says. None on macOS, which keeps no such list.
 pub fn installed_programs() -> Vec<(String, PathBuf)> {
-    let roots = [
-        (HKEY_LOCAL_MACHINE, w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall")),
-        (HKEY_LOCAL_MACHINE, w!("SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall")),
-        (HKEY_CURRENT_USER, w!("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall")),
-    ];
-    let mut programs = Vec::new();
-    for (hive, path) in roots {
-        for name in subkeys(hive, path) {
-            // SAFETY: `path` is one of the static registry paths below.
-            let key = HSTRING::from(format!("{}\\{name}", unsafe { path.to_string() }.unwrap_or_default()));
-            let key = PCWSTR(key.as_ptr());
-            let (Some(display), Some(location)) =
-                (registry_text(hive, key, w!("DisplayName")), registry_text(hive, key, w!("InstallLocation")))
-            else {
-                continue;
-            };
-            if !location.trim().is_empty() {
-                programs.push((display, PathBuf::from(location.trim().trim_matches('"'))));
-            }
-        }
-    }
-    programs
-}
-
-/// The names of a registry key's subkeys.
-fn subkeys(hive: HKEY, path: PCWSTR) -> Vec<String> {
-    let mut key = HKEY::default();
-    // SAFETY: the hive is a predefined key and `path` a static string; `key` is a local the call writes.
-    if unsafe { RegOpenKeyExW(hive, path, None, KEY_READ, &mut key) } != ERROR_SUCCESS {
-        return Vec::new();
-    }
-    let mut names = Vec::new();
-    for index in 0.. {
-        let mut buffer = [0u16; 256];
-        let mut length = buffer.len() as u32;
-        let status =
-            // SAFETY: the key is open; `buffer` is ours and `length` says how much of it the call may write.
-            unsafe { RegEnumKeyExW(key, index, Some(PWSTR(buffer.as_mut_ptr())), &mut length, None, None, None, None) };
-        if status != ERROR_SUCCESS {
-            break;
-        }
-        names.push(String::from_utf16_lossy(&buffer[..length as usize]));
-    }
-    // SAFETY: the key was opened above and is closed once, after its last use.
-    unsafe {
-        let _ = RegCloseKey(key);
-    }
-    names
-}
-
-/// A text value of the registry, if it's there.
-fn registry_text(hive: HKEY, path: PCWSTR, name: PCWSTR) -> Option<String> {
-    let mut buffer = [0u16; 1024];
-    let mut size = (buffer.len() * 2) as u32;
-    // SAFETY: the buffer is ours and `size` says how much of it the call may write, in bytes.
-    let status = unsafe {
-        RegGetValueW(hive, path, name, RRF_RT_REG_SZ, None, Some(buffer.as_mut_ptr().cast()), Some(&mut size))
-    };
-    if status != ERROR_SUCCESS {
-        return None;
-    }
-    let length = buffer.iter().position(|&c| c == 0).unwrap_or(buffer.len());
-    Some(String::from_utf16_lossy(&buffer[..length]))
+    platform::installed_programs()
 }
 
 #[cfg(test)]
@@ -292,6 +211,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
+    #[cfg(windows)]
     #[test]
     fn names_folders_plainly() {
         assert_eq!(plain(Path::new(r"\\?\C:\Users\a\WestPlay\ui")), Path::new(r"C:\Users\a\WestPlay\ui"));
@@ -300,6 +220,7 @@ mod tests {
         assert_eq!(plain(Path::new(r"\\server\share\ui")), Path::new(r"\\server\share\ui"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn names_a_folder_as_windows_does() {
         // Written as Steam writes its own folder: lowercase, forward slashes.

@@ -7,8 +7,12 @@ pub mod dlc;
 pub mod game;
 pub mod game_mod;
 pub mod map;
-pub mod pick;
+/// The OS's own pickers: a folder, files.
+pub mod pick {
+    pub use crate::platform::pick::{files, folder};
+}
 pub mod places;
+mod platform;
 pub mod plugin;
 pub mod profiles;
 pub mod record;

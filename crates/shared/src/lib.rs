@@ -1,30 +1,28 @@
 //! Bridge between the game plugin (`westplay.dll`, inside ETS2/ATS) and the WestPlay app.
 //!
-//! - **Frames** travel through a shared D3D11 texture created by the app and opened by the plugin by
+//! - **Frames**, on Windows, travel through a shared D3D11 texture created by the app and opened by the plugin by
 //!   name ([`frame_texture_name`]). Its keyed mutex is used as a plain lock (both sides use
 //!   [`FRAME_KEY`]): the app overwrites it with every new frame, the plugin copies it whenever
 //!   `frame_seq` changed. Each side holds it only for one copy and acquires with a zero timeout, so
-//!   neither the game nor the app ever waits; on contention the frame is simply picked up next time.
+//!   neither the game nor the app ever waits; on contention the frame is simply picked up next time. On macOS,
+//!   where the game draws with OpenGL, they travel as pixels through a shared-memory block of their own
+//!   ([`frames`]), triple-buffered so that neither waits either.
 //! - **Everything else** lives in one shared-memory block, [`Bridge`], mapped by both processes. All
 //!   fields are atomics or plain data guarded by a [`SeqLock`], so either side may start first.
 
 pub mod cityhash;
+pub mod frames;
+pub mod platform;
 
 use std::cell::UnsafeCell;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicI32, AtomicU32, AtomicU64, Ordering, fence};
 
-use windows::Win32::Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE};
-use windows::Win32::System::Memory::{
-    CreateFileMappingW, FILE_MAP_ALL_ACCESS, MEMORY_MAPPED_VIEW_ADDRESS, MapViewOfFile, PAGE_READWRITE, UnmapViewOfFile,
-};
-use windows::core::HSTRING;
-
 /// The bridge's name: its version in it, so an app and a plugin of different versions never share one (a
 /// bridge is laid out as whichever opened it first; one of another version, still held by a game or an app,
 /// would keep its layout until both are gone). [`BridgeMapping::matches`] still guards it.
 pub fn bridge_name() -> String {
-    format!("Local\\WestPlay.Bridge.v{BRIDGE_VERSION}")
+    platform::shared_name(&format!("WestPlay.Bridge.v{BRIDGE_VERSION}"))
 }
 pub const BRIDGE_MAGIC: u32 = u32::from_le_bytes(*b"WPB7");
 pub const BRIDGE_VERSION: u32 = 24;
@@ -758,50 +756,26 @@ impl<T: Plain> SeqLock<T> {
 
 /// A mapping of the [`Bridge`] shared memory. Whichever process maps it first creates it (zeroed).
 pub struct BridgeMapping {
-    handle: HANDLE,
-    view: MEMORY_MAPPED_VIEW_ADDRESS,
+    region: platform::Region,
 }
 
-// SAFETY: the mapping's handle and view may be used from any thread; what's in it is shared through atomics
-// and `SeqLock`s.
-unsafe impl Send for BridgeMapping {}
-// SAFETY: as for `Send`: the bridge's fields are atomics and `SeqLock`s, made to be shared.
-unsafe impl Sync for BridgeMapping {}
-
 impl BridgeMapping {
-    pub fn open() -> windows::core::Result<Self> {
-        let size = size_of::<Bridge>();
-        // SAFETY: the mapping is the bridge's size, so the view holds one `Bridge`, zeroed when new (a valid
-        // `Bridge`: atomics and plain data); it's closed if it can't be viewed.
-        unsafe {
-            let handle = CreateFileMappingW(
-                INVALID_HANDLE_VALUE,
-                None,
-                PAGE_READWRITE,
-                0,
-                size as u32,
-                &HSTRING::from(bridge_name()),
-            )?;
-            let view = MapViewOfFile(handle, FILE_MAP_ALL_ACCESS, 0, 0, size);
-            if view.Value.is_null() {
-                let error = windows::core::Error::from_thread();
-                let _ = CloseHandle(handle);
-                return Err(error);
-            }
-            let mapping = Self { handle, view };
-            let bridge = mapping.bridge();
-            if bridge.magic.load(Ordering::Acquire) != BRIDGE_MAGIC {
-                bridge.version.store(BRIDGE_VERSION, Ordering::Relaxed);
-                bridge.magic.store(BRIDGE_MAGIC, Ordering::Release);
-            }
-            Ok(mapping)
+    pub fn open() -> Result<Self, platform::Error> {
+        let region = platform::Region::open(&bridge_name(), size_of::<Bridge>())?;
+        let mapping = Self { region };
+        let bridge = mapping.bridge();
+        if bridge.magic.load(Ordering::Acquire) != BRIDGE_MAGIC {
+            bridge.version.store(BRIDGE_VERSION, Ordering::Relaxed);
+            bridge.magic.store(BRIDGE_MAGIC, Ordering::Release);
         }
+        Ok(mapping)
     }
 
     pub fn bridge(&self) -> &Bridge {
-        // SAFETY: the view holds a `Bridge` (see `open`), mapped as long as `self`, which the borrow can't
-        // outlive; it's shared only through atomics and `SeqLock`s.
-        unsafe { &*(self.view.Value as *const Bridge) }
+        // SAFETY: the region is a `Bridge`'s size, zeroed when new (a valid `Bridge`: atomics and plain data),
+        // mapped as long as `self`, which the borrow can't outlive; it's shared only through atomics and
+        // `SeqLock`s.
+        unsafe { &*(self.region.as_ptr() as *const Bridge) }
     }
 
     /// Whether the bridge is laid out as this build's ([`BRIDGE_VERSION`]): whichever side opened it first set
@@ -810,16 +784,6 @@ impl BridgeMapping {
     /// doesn't match.
     pub fn matches(&self) -> bool {
         self.bridge().version.load(Ordering::Acquire) == BRIDGE_VERSION
-    }
-}
-
-impl Drop for BridgeMapping {
-    fn drop(&mut self) {
-        // SAFETY: the view and the handle are this mapping's own, unmapped and closed once, as it goes.
-        unsafe {
-            let _ = UnmapViewOfFile(self.view);
-            let _ = CloseHandle(self.handle);
-        }
     }
 }
 
@@ -844,7 +808,12 @@ mod tests {
 
     #[test]
     fn the_bridges_name_carries_its_version() {
+        #[cfg(windows)]
         assert_eq!(super::bridge_name(), format!("Local\\WestPlay.Bridge.v{}", super::BRIDGE_VERSION));
+        #[cfg(not(windows))]
+        assert_eq!(super::bridge_name(), format!("/WestPlay.Bridge.v{}", super::BRIDGE_VERSION));
+        // macOS takes no longer shared-memory name, however far the version goes.
+        assert!(super::bridge_name().len() + 6 <= platform::MAX_NAME_LEN);
     }
 
     use super::*;

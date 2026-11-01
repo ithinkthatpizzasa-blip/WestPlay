@@ -158,6 +158,8 @@ mod tests {
         assert_eq!(installation_in(&roaming), None);
     }
 
+    // Windows' paths: TruckersMP is Windows' only (none on macOS).
+    #[cfg(windows)]
     #[test]
     fn makes_truckersmp_a_profile_of_the_base_map_with_its_packs_in_order() {
         let packs = [PathBuf::from(r"C:\nowhere\data2.mp"), PathBuf::from(r"C:\nowhere\hq_final.mp")];

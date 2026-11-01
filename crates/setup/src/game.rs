@@ -1,22 +1,15 @@
 //! Finding the game: every install of Euro Truck Simulator 2 on the PC (Steam's, in any of its libraries, and
-//! others Windows lists as installed), each with its version (its executable's) and its DLCs.
+//! others Windows lists as installed), each with its version (its executable's; on macOS its pack set's) and its
+//! DLCs.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use windows::Win32::Storage::FileSystem::{
-    GetFileVersionInfoSizeW, GetFileVersionInfoW, VS_FIXEDFILEINFO, VerQueryValueW,
-};
-use windows::core::{HSTRING, w};
-
-use crate::{places, vdf};
+use crate::platform::{EXECUTABLE, PLUGINS_DIR, PROCESS};
+use crate::{places, platform, vdf};
 
 /// The game's app id on Steam (its manifest, its Workshop folder, its Steam Cloud folder).
 pub const STEAM_APP: &str = "227300";
-/// The game's executable, in its folder.
-const EXECUTABLE: &str = "bin/win_x64/eurotrucks2.exe";
-/// The game's process, as Windows names it (TruckersMP's client runs the same).
-const PROCESS: &str = "eurotrucks2.exe";
 /// The game versions WestPlay has been tried with. Others may well work (the plugin finds what it needs in
 /// the game by its shape), but haven't been tried.
 pub const TESTED_VERSIONS: &str = "1.61.*";
@@ -27,7 +20,7 @@ pub struct Game {
     /// Its folder (with `base.scs`).
     pub dir: PathBuf,
     pub found_by: FoundBy,
-    /// Its version, from its executable (`None`: it couldn't be read).
+    /// Its version, from its executable (on macOS, its `version.scs`; `None`: it couldn't be read).
     pub version: Option<Version>,
     /// Its DLCs' archives, by name (`dlc_balkan_e`…), in order.
     pub dlcs: Vec<String>,
@@ -81,7 +74,7 @@ impl Game {
             })
             .collect();
         dlcs.sort();
-        Some(Self { dir: dir.to_path_buf(), found_by, version: executable_version(&dir.join(EXECUTABLE)), dlcs })
+        Some(Self { dir: dir.to_path_buf(), found_by, version: platform::game_version(dir), dlcs })
     }
 
     /// The game in `dir`, found as [`find`] finds it (Steam's, or listed as installed) or else as chosen.
@@ -110,7 +103,7 @@ impl Game {
 
     /// Where the plugin goes.
     pub fn plugins_dir(&self) -> PathBuf {
-        self.dir.join("bin").join("win_x64").join("plugins")
+        PLUGINS_DIR.iter().fold(self.dir.clone(), |dir, part| dir.join(part))
     }
 }
 
@@ -145,30 +138,7 @@ pub fn find() -> Vec<Game> {
 
 /// Whether the game is running (any install of it).
 pub fn running() -> bool {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-    };
-    // SAFETY: a snapshot of the PC's processes, closed below.
-    let Ok(snapshot) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else { return false };
-    let mut entry = PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-    let mut found = false;
-    // SAFETY: the snapshot is open; `entry` is a local with its size set, as the call requires.
-    let mut more = unsafe { Process32FirstW(snapshot, &mut entry) }.is_ok();
-    while more {
-        let length = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(entry.szExeFile.len());
-        if String::from_utf16_lossy(&entry.szExeFile[..length]).eq_ignore_ascii_case(PROCESS) {
-            found = true;
-            break;
-        }
-        // SAFETY: as above: the open snapshot, and `entry` with its size set.
-        more = unsafe { Process32NextW(snapshot, &mut entry) }.is_ok();
-    }
-    // SAFETY: the snapshot is closed once, after its last use.
-    unsafe {
-        let _ = CloseHandle(snapshot);
-    }
-    found
+    platform::process_running(PROCESS)
 }
 
 /// The game's folder name in its Steam library, from its `appmanifest_227300.acf`.
@@ -197,31 +167,17 @@ fn same_folder(a: &Path, b: &Path) -> bool {
     key(a) == key(b)
 }
 
-/// An executable's file version (its version resource's), if it has one.
-fn executable_version(path: &Path) -> Option<Version> {
-    let file = HSTRING::from(path.as_os_str());
-    // SAFETY: `data` is the size Windows asked for and is read only through it; the fixed info is checked to be
-    // there and long enough before it's read.
-    unsafe {
-        let size = GetFileVersionInfoSizeW(&file, None);
-        if size == 0 {
-            return None;
-        }
-        let mut data = vec![0u8; size as usize];
-        GetFileVersionInfoW(&file, None, size, data.as_mut_ptr().cast()).ok()?;
-        let mut info: *mut core::ffi::c_void = std::ptr::null_mut();
-        let mut length = 0u32;
-        if !VerQueryValueW(data.as_ptr().cast(), w!("\\"), &mut info, &mut length).as_bool()
-            || info.is_null()
-            || (length as usize) < size_of::<VS_FIXEDFILEINFO>()
-        {
-            return None;
-        }
-        // Within `data`, a byte buffer: read as it lies, whatever its alignment.
-        let info = std::ptr::read_unaligned(info as *const VS_FIXEDFILEINFO);
-        let (ms, ls) = (info.dwFileVersionMS, info.dwFileVersionLS);
-        Some(Version([(ms >> 16) as u16, ms as u16, (ls >> 16) as u16, ls as u16]))
+/// The version a pack set's `version.sii` (in the game's `version.scs`) gives: `version: "1.57.2.7"`.
+pub fn pack_version(text: &str) -> Option<Version> {
+    let units = westplay_mapdata::sii::parse(text);
+    let version = units.iter().find_map(|unit| unit.get("version"))?;
+    let mut parts = [0u16; 4];
+    let mut count = 0;
+    for (slot, part) in parts.iter_mut().zip(version.trim_matches('"').split('.')) {
+        *slot = part.parse().ok()?;
+        count += 1;
     }
+    (count >= 2).then_some(Version(parts))
 }
 
 #[cfg(test)]
@@ -271,6 +227,14 @@ mod tests {
         assert_eq!(version.to_string(), "1.61.1.9");
         assert!(version.matches("1.61.*") && version.matches("1.61.1.9") && version.matches("1.*"));
         assert!(!version.matches("1.60.*") && !version.matches("1.6.*") && !version.matches(""));
+    }
+
+    #[test]
+    fn reads_the_version_of_a_pack_set() {
+        let text = "SiiNunit\n{\nfs_pack_set : _nameless.220.d670 {\n application: eut2\n version: \"1.57.2.7\"\n platforms: 1\n}\n}\n";
+        assert_eq!(pack_version(text), Some(Version([1, 57, 2, 7])));
+        assert_eq!(pack_version("SiiNunit { fs_pack_set : x { application: eut2 } }"), None);
+        assert_eq!(pack_version("SiiNunit { fs_pack_set : x { version: \"one\" } }"), None);
     }
 
     /// The real thing, on this PC: prints what's found. `cargo test -p westplay-setup -- --ignored --nocapture`
