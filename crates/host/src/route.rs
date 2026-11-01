@@ -31,11 +31,15 @@ use crate::maps::PlayedMap;
 use westplay_mapdata::junctions::{self, Junctions, Maneuver};
 use westplay_setup::map;
 use westplay_shared::BridgeMapping;
+#[cfg(windows)]
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
+#[cfg(windows)]
 use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+#[cfg(windows)]
 use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, TH32CS_SNAPMODULE,
 };
+#[cfg(windows)]
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 
 /// How often the route is read.
@@ -429,6 +433,7 @@ impl JunctionFiles {
 }
 
 /// The running game's process, opened to read its memory: where its executable is loaded, and its file.
+#[cfg(windows)]
 pub(crate) struct Process {
     pub pid: u32,
     handle: HANDLE,
@@ -436,6 +441,34 @@ pub(crate) struct Process {
     pub exe: PathBuf,
 }
 
+/// The running game's process, as Windows' (read from outside). On macOS another program may read a process's
+/// memory only as a debugger may (an entitlement of Apple's granting, or root), and the Mac game's executable is
+/// another compiler's code of another version (docs/MACOS_PORT.md): what's read from the game is to be read inside
+/// it, by the plugin, and passed through the bridge. Until then there's none to open.
+#[cfg(target_os = "macos")]
+pub(crate) struct Process {
+    pub pid: u32,
+    pub base: usize,
+    pub exe: PathBuf,
+}
+
+#[cfg(target_os = "macos")]
+impl Process {
+    /// `who` names the reader in what's logged: it says why there's nothing.
+    pub fn open(pid: u32, who: &str) -> Option<Self> {
+        log!("{who}: the game's memory isn't read from outside on macOS (game {pid}): not available yet");
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Memory for Process {
+    fn read(&self, _address: usize, _buffer: &mut [u8]) -> bool {
+        false
+    }
+}
+
+#[cfg(windows)]
 impl Drop for Process {
     fn drop(&mut self) {
         // SAFETY: the process handle is this reader's own, closed once, as it goes.
@@ -445,6 +478,7 @@ impl Drop for Process {
     }
 }
 
+#[cfg(windows)]
 impl Process {
     /// `who` names the reader in what's logged.
     pub fn open(pid: u32, who: &str) -> Option<Self> {
@@ -467,6 +501,7 @@ impl Process {
     }
 }
 
+#[cfg(windows)]
 impl Memory for Process {
     fn read(&self, address: usize, buffer: &mut [u8]) -> bool {
         let mut read = 0;
@@ -522,6 +557,7 @@ fn map_node_of(bytes: &[u8; MAP_NODE_SIZE]) -> RouteNode {
 }
 
 /// The game's executable: where it's loaded and its file.
+#[cfg(windows)]
 fn main_module(pid: u32) -> windows::core::Result<(usize, PathBuf)> {
     // SAFETY: the snapshot is closed once after use; `entry` is a local with its size set, as the call requires.
     unsafe {

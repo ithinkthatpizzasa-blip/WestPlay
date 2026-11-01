@@ -1,5 +1,6 @@
 //! Standalone host for development: `westplay-host [url] [--size WxH]`.
-//! Without a URL it shows the built-in test page.
+//! Without a URL it shows the built-in test page. On macOS the host runs on a thread of its own, the main thread
+//! running AppKit's event loop, which WebKit needs (as in the companion).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -24,9 +25,7 @@ fn main() {
         }
     }
 
-    let data_dir = std::env::var_os("LOCALAPPDATA")
-        .map(|dir| PathBuf::from(dir).join("WestPlay"))
-        .unwrap_or_else(|| std::env::temp_dir().join("WestPlay"));
+    let data_dir = data_dir();
     let config = Config {
         width,
         height,
@@ -57,8 +56,44 @@ fn main() {
         std::process::exit(1);
     };
     println!("WestPlay host {width}x{height}; Ctrl+C to quit");
+    #[cfg(windows)]
     if let Err(e) = run(config, Arc::new(AtomicBool::new(false))) {
         eprintln!("host failed: {e}");
         std::process::exit(1);
     }
+    #[cfg(target_os = "macos")]
+    run_with_appkit(config);
+}
+
+/// Where the standalone host keeps its WebViews' profiles and maps.
+fn data_dir() -> PathBuf {
+    #[cfg(windows)]
+    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from);
+    #[cfg(target_os = "macos")]
+    let base = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library").join("Application Support"));
+    base.map(|dir| dir.join("WestPlay")).unwrap_or_else(|| std::env::temp_dir().join("WestPlay"))
+}
+
+/// The host on a thread of its own, AppKit's event loop on this one (the main thread) until the host ends.
+#[cfg(target_os = "macos")]
+fn run_with_appkit(config: Config) {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
+    let mtm = MainThreadMarker::new().expect("main runs on the main thread");
+    let app = NSApplication::sharedApplication(mtm);
+    app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
+    std::thread::Builder::new()
+        .name("westplay-host".into())
+        .spawn(move || {
+            let code = match run(config, Arc::new(AtomicBool::new(false))) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("host failed: {e}");
+                    1
+                }
+            };
+            std::process::exit(code);
+        })
+        .expect("the host's thread");
+    app.run();
 }

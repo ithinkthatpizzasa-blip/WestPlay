@@ -18,6 +18,7 @@ pub mod graphics;
 mod handover;
 mod lyrics;
 pub mod maps;
+mod os;
 mod performance;
 mod planner;
 mod play_log;
@@ -42,12 +43,10 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 use westplay_shared::{BridgeMapping, JobInfo, Keybind, Telemetry, TruckInfo, screen_layouts};
-use windows::Win32::Foundation::LUID;
-use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
-use windows::Win32::UI::WindowsAndMessaging::{DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, TranslateMessage};
 
 use capture::Capture;
-use gpu::{Gpu, SharedFrame};
+use gpu::Gpu;
+use graphics::LUID;
 use player::{PartSpeakers, Player, PlayerWatch};
 use pointer::Pointer;
 use route::{RouteUpdate, RouteWatch};
@@ -56,6 +55,8 @@ use weather::{Sky, Weather, WeatherWatch};
 use webview::{OffscreenWebView, Stage};
 use westplay_mapdata::junctions::Turn;
 
+pub use os::{Instance, tell_already_running};
+use os::{has_module, is_elevated, is_running, is_shown, pump_messages};
 pub use webview::{Error, wait_for_browsers};
 /// Size the cabin page is rendered at: the size of the frames the plugin copies into the screen textures.
 pub use westplay_shared::{SCREEN_HEIGHT, SCREEN_WIDTH};
@@ -230,7 +231,11 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
     startup::mark("host: started");
     // SAFETY: COM on this thread, once, before anything on it uses COM (WebView2 needs a single-threaded
     // apartment).
-    unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()? };
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+        CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok()?
+    };
     let bridge = Arc::new(BridgeMapping::open()?);
     let host = &bridge.bridge().host;
     host.pid.store(std::process::id(), Ordering::Release);
@@ -248,7 +253,7 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
     }
     let webview = OffscreenWebView::new(&stage, config.width, config.height, &config.data_dir.join("webview2"))?;
     stage.add(&webview, true)?;
-    startup::mark("host: cabin browser (WebView2) ready");
+    startup::mark("host: cabin browser ready");
     match &config.content {
         Content::Url(url) => webview.navigate(url)?,
         Content::Html(html) => webview.navigate_to_string(html)?,
@@ -1544,59 +1549,6 @@ impl Liveness {
     }
 }
 
-/// Being the one WestPlay running in this Windows session: two would both drive the game's bridge (taking
-/// turns at its typed-key queue, which has room for one reader, and flipping the game between their frames).
-/// Held for as long as the app runs; a WestPlay that's killed lets go with its process.
-pub struct Instance(windows::Win32::Foundation::HANDLE);
-
-// SAFETY: a handle to a named mutex, only ever closed (once, as it goes), from whichever thread.
-unsafe impl Send for Instance {}
-
-impl Instance {
-    /// Claims being the one WestPlay, or `None` if another is running.
-    pub fn claim() -> Option<Self> {
-        Self::claim_named(windows::core::w!(r"Local\WestPlay.Instance"))
-    }
-
-    fn claim_named(name: windows::core::PCWSTR) -> Option<Self> {
-        use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError};
-        // SAFETY: a plain call: the name is a static string, the mutex is the process's own.
-        let handle = unsafe { windows::Win32::System::Threading::CreateMutexW(None, false, name) }.ok()?;
-        // SAFETY: reads this thread's last error, right after the call it's for.
-        if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
-            // SAFETY: `handle` was just opened, and nothing else holds it.
-            unsafe {
-                let _ = CloseHandle(handle);
-            }
-            return None;
-        }
-        Some(Self(handle))
-    }
-}
-
-impl Drop for Instance {
-    fn drop(&mut self) {
-        // SAFETY: the mutex is this `Instance`'s own, closed once, as it goes.
-        unsafe {
-            let _ = windows::Win32::Foundation::CloseHandle(self.0);
-        }
-    }
-}
-
-/// Tells the player WestPlay is already running (a second one was started), in a message box.
-pub fn tell_already_running() {
-    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONINFORMATION, MB_OK, MessageBoxW};
-    // SAFETY: a message box with static strings, no owner window.
-    unsafe {
-        MessageBoxW(
-            None,
-            windows::core::w!("WestPlay is already running. Find it in the taskbar or the notification area."),
-            windows::core::w!("WestPlay"),
-            MB_OK | MB_ICONINFORMATION,
-        );
-    }
-}
-
 /// [`run`] stopped because WebView2's browser process exited, taking the cabin page's WebView with it: run it
 /// again, on a new thread (the thread's composition, set up for the WebView, can't be set up twice).
 #[derive(Debug)]
@@ -1631,135 +1583,10 @@ fn log_startup(bridge: &BridgeMapping, pipeline: Option<&Pipeline>, screen_frame
     !stages.iter().all(|(reached, _)| *reached)
 }
 
-/// Whether the process `game` (its pid; 0: no game) has a window showing: shown, not minimised, not cloaked
-/// (on another virtual desktop). In front or not: Lossless Scaling's window is in front of a game it scales,
-/// and a window over the game leaves it showing (owner 2026-10-28). Without a game, it counts as showing
-/// (nothing to be away from).
-fn is_shown(game: u32) -> bool {
-    use windows::Win32::Foundation::{HWND, LPARAM};
-    use windows::Win32::Graphics::Dwm::{DWMWA_CLOAKED, DwmGetWindowAttribute};
-    use windows::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsIconic, IsWindowVisible};
-    use windows::core::BOOL;
-
-    struct Looking {
-        game: u32,
-        shown: bool,
-    }
-    unsafe extern "system" fn each(window: HWND, looking: LPARAM) -> BOOL {
-        // SAFETY: `looking` is the `Looking` below, alive through `EnumWindows`; the window is only asked about.
-        unsafe {
-            let looking = &mut *(looking.0 as *mut Looking);
-            let mut owner = 0;
-            GetWindowThreadProcessId(window, Some(&mut owner));
-            if owner != looking.game || !IsWindowVisible(window).as_bool() || IsIconic(window).as_bool() {
-                return BOOL(1);
-            }
-            let mut cloaked = 0u32;
-            let read = DwmGetWindowAttribute(
-                window,
-                DWMWA_CLOAKED,
-                (&raw mut cloaked).cast(),
-                size_of::<u32>() as u32,
-            );
-            looking.shown = read.is_err() || cloaked == 0;
-            // Found one showing: done.
-            BOOL(i32::from(!looking.shown))
-        }
-    }
-
-    if game == 0 {
-        return true;
-    }
-    let mut looking = Looking { game, shown: false };
-    // SAFETY: `each` only reads the windows and writes `looking`, which outlives the call. Stopping early makes
-    // it return an error: what was found stands.
-    let _ = unsafe { EnumWindows(Some(each), LPARAM(&raw mut looking as isize)) };
-    looking.shown
-}
-
-/// Whether the process `game` (its pid) runs as administrator (elevated), as Task Manager's "Elevated" says: then
-/// Windows keeps WestPlay out of it, and the game's route, guidance and weather can't be read. WestPlay doesn't
-/// work with a game run that way (owner 2026-10-28: nothing that reaches into an elevated game); the player is
-/// told. A token WestPlay isn't let read counts as elevated: it's kept out all the same.
-fn is_elevated(game: u32) -> bool {
-    use windows::Win32::Foundation::{CloseHandle, E_ACCESSDENIED, HANDLE};
-    use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
-    use windows::Win32::System::Threading::{OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION};
-    if game == 0 {
-        return false;
-    }
-    // SAFETY: handles opened here and closed once; `elevation` and `length` are locals the call writes, its size
-    // given.
-    unsafe {
-        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, game) else { return false };
-        let mut token = HANDLE::default();
-        let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token);
-        let _ = CloseHandle(process);
-        if let Err(error) = opened {
-            return error.code() == E_ACCESSDENIED;
-        }
-        let mut elevation = TOKEN_ELEVATION::default();
-        let mut length = 0;
-        let read = GetTokenInformation(
-            token,
-            TokenElevation,
-            Some((&raw mut elevation).cast()),
-            size_of::<TOKEN_ELEVATION>() as u32,
-            &mut length,
-        );
-        let _ = CloseHandle(token);
-        read.is_ok() && elevation.TokenIsElevated != 0
-    }
-}
-
-/// Whether the process `game` (its pid; 0: no game) is running: the plugin clears its pid as the game closes,
-/// and a game that crashed leaves it behind, its process gone.
-fn is_running(game: u32) -> bool {
-    use windows::Win32::Foundation::{CloseHandle, WAIT_TIMEOUT};
-    use windows::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE, WaitForSingleObject};
-    if game == 0 {
-        return false;
-    }
-    // SAFETY: a handle opened here, waited on without waiting (signalled: the process has ended), and closed.
-    unsafe {
-        let Ok(process) = OpenProcess(PROCESS_SYNCHRONIZE, false, game) else { return false };
-        let running = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
-        let _ = CloseHandle(process);
-        running
-    }
-}
-
 /// TruckersMP's client modules (ETS2's, ATS's): one loaded in the game, it runs under TruckersMP.
 const TRUCKERSMP_MODULES: &[&str] = &["core_ets2mp.dll", "core_atsmp.dll"];
 /// How often a running game is looked at for TruckersMP until it's found.
 const TRUCKERSMP_CHECK_EVERY: Duration = Duration::from_secs(5);
-
-/// Whether the process `pid` has one of the modules `names` loaded (names compared ignoring case). Only the
-/// game's list of modules is looked at, nothing in them.
-fn has_module(pid: u32, names: &[&str]) -> bool {
-    use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, MODULEENTRY32W, Module32FirstW, Module32NextW, TH32CS_SNAPMODULE,
-    };
-    if pid == 0 {
-        return false;
-    }
-    // SAFETY: the snapshot is closed once after use; `entry` is a local with its size set, as the calls require.
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid) else { return false };
-        let mut entry = MODULEENTRY32W { dwSize: size_of::<MODULEENTRY32W>() as u32, ..Default::default() };
-        let mut found = false;
-        let mut more = Module32FirstW(snapshot, &mut entry).is_ok();
-        while more && !found {
-            let length = entry.szModule.iter().position(|&c| c == 0).unwrap_or(entry.szModule.len());
-            let module = String::from_utf16_lossy(&entry.szModule[..length]);
-            found = names.iter().any(|name| module.eq_ignore_ascii_case(name));
-            more = Module32NextW(snapshot, &mut entry).is_ok();
-        }
-        let _ = CloseHandle(snapshot);
-        found
-    }
-}
 
 /// How often the players around the player under TruckersMP may go to the page.
 const NEARBY_POST_EVERY: Duration = Duration::from_millis(33);
@@ -1925,6 +1752,7 @@ fn start_spotify<'a>(
     spotify.as_ref()
 }
 
+#[cfg(windows)]
 fn build_pipeline(
     config: &Config,
     stage: &Stage,
@@ -1933,8 +1761,22 @@ fn build_pipeline(
     generation: u32,
 ) -> Result<Pipeline, Error> {
     let gpu = Gpu::new(luid)?;
-    let shared = Arc::new(SharedFrame::new(&gpu, config.width, config.height, generation)?);
+    let shared = Arc::new(gpu::SharedFrame::new(&gpu, config.width, config.height, generation)?);
     let capture = Capture::start(&gpu, &stage.visual()?, shared, bridge.clone())?;
+    Ok(Pipeline { gpu, capture })
+}
+
+/// The capture pipeline on macOS: frames go through memory (`westplay_shared::frames`), on no GPU of the game's.
+#[cfg(target_os = "macos")]
+fn build_pipeline(
+    _config: &Config,
+    stage: &Stage,
+    bridge: &Arc<BridgeMapping>,
+    luid: Option<LUID>,
+    _generation: u32,
+) -> Result<Pipeline, Error> {
+    let gpu = Gpu::new(luid)?;
+    let capture = Capture::start(stage, bridge.clone())?;
     Ok(Pipeline { gpu, capture })
 }
 
@@ -2149,21 +1991,11 @@ fn same_luid(a: LUID, b: LUID) -> bool {
     a.LowPart == b.LowPart && a.HighPart == b.HighPart
 }
 
-fn pump_messages() {
-    // SAFETY: this thread's own messages, each passed on as Windows hands it; `msg` is a local.
-    unsafe {
-        let mut msg = MSG::default();
-        while PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE).as_bool() {
-            let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{PageMessage, PageRouteAction, parse_page_message, screen_message, settings_message};
 
+    #[cfg(windows)]
     #[test]
     fn a_game_run_normally_isnt_elevated() {
         use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -2176,6 +2008,7 @@ mod tests {
 
     /// Every process on this PC, elevated or not, for a look by eye (`--ignored --nocapture`): the system's own
     /// services elevated, the player's own programs not.
+    #[cfg(windows)]
     #[test]
     #[ignore]
     fn lists_which_processes_are_elevated() {
@@ -2196,6 +2029,7 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
     #[test]
     fn the_game_shows_while_its_window_does_in_front_or_not() {
         use windows::Win32::System::Threading::GetCurrentProcessId;
@@ -2314,6 +2148,7 @@ mod tests {
         assert_eq!(parse_page_message("not json"), None);
     }
 
+    #[cfg(windows)]
     #[test]
     fn only_one_westplay_claims_the_session() {
         // A name of the test's own (a WestPlay may be running on this PC).
@@ -2336,6 +2171,7 @@ mod tests {
         assert_eq!(super::nearby_message(None), r#"{"local":null,"players":[],"server":null,"type":"nearby"}"#);
     }
 
+    #[cfg(windows)]
     #[test]
     fn finds_a_module_a_process_has_loaded() {
         use super::has_module;
@@ -2351,7 +2187,11 @@ mod tests {
         assert!(!is_running(0));
         assert!(is_running(std::process::id()));
         // A game that crashed: its pid left behind, its process ended.
-        let mut ended = std::process::Command::new("cmd").args(["/c", "exit"]).spawn().unwrap();
+        let mut ended = if cfg!(windows) {
+            std::process::Command::new("cmd").args(["/c", "exit"]).spawn().unwrap()
+        } else {
+            std::process::Command::new("/usr/bin/true").spawn().unwrap()
+        };
         let pid = ended.id();
         ended.wait().unwrap();
         assert!(!is_running(pid));

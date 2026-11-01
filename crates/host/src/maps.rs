@@ -775,18 +775,7 @@ fn panic_message(panic: &(dyn std::any::Any + Send)) -> String {
 
 /// The memory WestPlay has taken (its private bytes, what it holds whether in RAM or paged out).
 fn process_memory() -> Option<u64> {
-    use windows::Win32::System::ProcessStatus::{
-        GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
-    };
-    use windows::Win32::System::Threading::GetCurrentProcess;
-    let mut counters =
-        PROCESS_MEMORY_COUNTERS_EX { cb: size_of::<PROCESS_MEMORY_COUNTERS_EX>() as u32, ..Default::default() };
-    // SAFETY: `counters` is a local with its size set, read as the larger form the size says it is.
-    unsafe {
-        GetProcessMemoryInfo(GetCurrentProcess(), (&raw mut counters).cast::<PROCESS_MEMORY_COUNTERS>(), counters.cb)
-    }
-    .ok()?;
-    Some(counters.PrivateUsage as u64)
+    crate::os::process_memory()
 }
 
 fn gigabytes(bytes: u64) -> String {
@@ -799,13 +788,9 @@ fn memory_ceiling(total: u64) -> u64 {
     (total / 5 * 3).max(CEILING_AT_LEAST)
 }
 
-/// The PC's memory: free now, and in all (bytes); `None` if Windows doesn't say.
+/// The PC's memory: free now, and in all (bytes); `None` if the OS doesn't say.
 fn memory() -> Option<(u64, u64)> {
-    use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-    let mut status = MEMORYSTATUSEX { dwLength: size_of::<MEMORYSTATUSEX>() as u32, ..Default::default() };
-    // SAFETY: `status` is a local with its size set, as the call requires.
-    unsafe { GlobalMemoryStatusEx(&mut status) }.ok()?;
-    Some((status.ullAvailPhys, status.ullTotalPhys))
+    crate::os::memory()
 }
 
 /// What's free, when a build has to wait for more: the PC has enough memory in all but not free now. One that

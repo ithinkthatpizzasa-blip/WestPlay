@@ -17,20 +17,18 @@ use std::collections::HashMap;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
-use webview2_com::GetProcessExtendedInfosCompletedHandler;
-use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_PROCESS_KIND, COREWEBVIEW2_PROCESS_KIND_BROWSER, COREWEBVIEW2_PROCESS_KIND_GPU,
-    COREWEBVIEW2_PROCESS_KIND_RENDERER, ICoreWebView2Environment, ICoreWebView2Environment13,
-    ICoreWebView2ProcessExtendedInfo, ICoreWebView2ProcessExtendedInfoCollection,
-};
-use windows::Win32::Foundation::{CloseHandle, FILETIME};
-use windows::Win32::System::Diagnostics::ToolHelp::{
-    CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
-};
-use windows::Win32::System::Threading::{GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
-use windows::core::{BOOL, Interface, PWSTR};
+#[cfg(windows)]
+mod windows;
+#[cfg(windows)]
+use self::windows as platform;
+
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(target_os = "macos")]
+use self::macos as platform;
 
 use crate::webview::OffscreenWebView;
+pub use platform::Environment;
 
 /// How often the line is written.
 const WINDOW: Duration = Duration::from_secs(10);
@@ -95,7 +93,7 @@ impl Meter {
         now: Instant,
         sample: Option<Sample>,
         cab: &OffscreenWebView,
-        profiles: &[(Profile, &ICoreWebView2Environment)],
+        profiles: &[(Profile, &Environment)],
     ) {
         let Some(sample) = sample else {
             self.window = None;
@@ -129,7 +127,7 @@ impl Meter {
         }
     }
 
-    fn begin(&mut self, now: Instant, sample: &Sample, profiles: &[(Profile, &ICoreWebView2Environment)]) {
+    fn begin(&mut self, now: Instant, sample: &Sample, profiles: &[(Profile, &Environment)]) {
         self.window = Some(Window {
             started: now,
             game_frames: sample.game_frames,
@@ -138,7 +136,7 @@ impl Meter {
             waited: sample.waited,
             seconds: 0,
             in_view: 0,
-            cpu: processor_times(&processes()),
+            cpu: platform::processor_times(&platform::processes()),
         });
         self.parts.borrow_mut().clear();
         for &(profile, environment) in profiles {
@@ -155,12 +153,10 @@ impl Meter {
         let captured = sample.captured.saturating_sub(window.captured) as f64 / seconds;
         let waited = sample.waited.saturating_sub(window.waited) as f64 / seconds;
         let in_view = 100 * window.in_view / window.seconds.max(1);
-        let ours = std::process::id();
         let parts = self.parts.borrow();
-        let tree = process_tree();
-        let browsers = crate::webview::host_browsers();
-        let used = cores_by_part(&window.cpu, &processor_times(&descendants(ours, &tree)), seconds, |pid| {
-            part_of(pid, ours, &tree, &parts, &browsers)
+        let namer = platform::Namer::new(&parts);
+        let used = cores_by_part(&window.cpu, &platform::processor_times(&platform::processes()), seconds, |pid| {
+            namer.part(pid)
         });
         let total: f64 = used.iter().map(|(_, cores)| cores).sum();
         let threads = std::thread::available_parallelism().map_or(0, |n| n.get());
@@ -196,22 +192,9 @@ impl Meter {
         }
     }
 
-    /// Asks WebView2 which of `profile`'s processes is which (it answers later, on this thread).
-    fn ask_parts(&self, profile: Profile, environment: &ICoreWebView2Environment) {
-        // Older WebView2 runtimes can't say: their processes count as "other".
-        let Ok(environment) = environment.cast::<ICoreWebView2Environment13>() else { return };
-        let parts = self.parts.clone();
-        let cab_host = self.cab_host.clone();
-        let handler = GetProcessExtendedInfosCompletedHandler::create(Box::new(move |error, infos| {
-            if let (Ok(()), Some(infos)) = (error, infos) {
-                for (pid, part) in parts_of(&infos, profile, &cab_host) {
-                    parts.borrow_mut().insert(pid, part);
-                }
-            }
-            Ok(())
-        }));
-        // SAFETY: the handler is a local for the call; WebView2 keeps its own reference to it.
-        let _ = unsafe { environment.GetProcessExtendedInfos(&handler) };
+    /// Asks the browser which of `profile`'s processes is which (it answers later, on this thread).
+    fn ask_parts(&self, profile: Profile, environment: &Environment) {
+        platform::ask_parts(&self.parts, &self.cab_host, profile, environment);
     }
 }
 
@@ -225,38 +208,8 @@ fn described(renderer: String) -> String {
     }
 }
 
-/// Each process of a WebView2 profile, and the part of WestPlay it is.
-fn parts_of(
-    infos: &ICoreWebView2ProcessExtendedInfoCollection,
-    profile: Profile,
-    cab_host: &str,
-) -> Vec<(u32, &'static str)> {
-    let mut count = 0;
-    // SAFETY: `count` is a local the call writes.
-    if unsafe { infos.Count(&mut count) }.is_err() {
-        return Vec::new();
-    }
-    (0..count)
-        .filter_map(|index| {
-            // SAFETY: an index below the collection's count.
-            let info = unsafe { infos.GetValueAtIndex(index) }.ok()?;
-            let (pid, kind) = process_of(&info)?;
-            let part = match profile {
-                Profile::Spotify => "Spotify",
-                Profile::AppleMusic => "Apple Music",
-                Profile::Cab => match kind {
-                    COREWEBVIEW2_PROCESS_KIND_BROWSER => "browser",
-                    COREWEBVIEW2_PROCESS_KIND_GPU => "GPU",
-                    COREWEBVIEW2_PROCESS_KIND_RENDERER => page_part(&frame_hosts(&info), cab_host),
-                    _ => "helpers",
-                },
-            };
-            Some((pid, part))
-        })
-        .collect()
-}
-
 /// What a renderer of the cab's profile draws, from the hosts of its pages.
+#[cfg_attr(not(windows), allow(dead_code))]
 fn page_part(hosts: &[String], cab_host: &str) -> &'static str {
     if hosts.iter().any(|host| host == cab_host) {
         "cab page"
@@ -265,40 +218,6 @@ fn page_part(hosts: &[String], cab_host: &str) -> &'static str {
     } else {
         "other pages"
     }
-}
-
-fn process_of(info: &ICoreWebView2ProcessExtendedInfo) -> Option<(u32, COREWEBVIEW2_PROCESS_KIND)> {
-    // SAFETY: plain queries; `pid` and `kind` are locals the calls write.
-    unsafe {
-        let process = info.ProcessInfo().ok()?;
-        let (mut pid, mut kind) = (0, COREWEBVIEW2_PROCESS_KIND::default());
-        process.ProcessId(&mut pid).ok()?;
-        process.Kind(&mut kind).ok()?;
-        Some((pid as u32, kind))
-    }
-}
-
-/// The hosts of the pages a renderer draws.
-fn frame_hosts(info: &ICoreWebView2ProcessExtendedInfo) -> Vec<String> {
-    let mut hosts = Vec::new();
-    // SAFETY: plain queries of WebView2's own collection; the strings it writes are freed by `CoTaskMemPWSTR`.
-    unsafe {
-        let Ok(frames) = info.AssociatedFrameInfos() else { return hosts };
-        let Ok(frames) = frames.GetIterator() else { return hosts };
-        let mut more = BOOL::default();
-        while frames.HasCurrent(&mut more).is_ok() && more.as_bool() {
-            if let Ok(frame) = frames.GetCurrent() {
-                let mut source = PWSTR::null();
-                if frame.Source(&mut source).is_ok() {
-                    hosts.extend(host_of(&webview2_com::CoTaskMemPWSTR::from(source).to_string()));
-                }
-            }
-            if frames.MoveNext(&mut more).is_err() {
-                break;
-            }
-        }
-    }
-    hosts
 }
 
 /// The host of an address (`https://westplay.cabin/index.html`: `westplay.cabin`).
@@ -339,10 +258,11 @@ fn with_page(line: &str, frames: Option<f64>, seconds: f64) -> String {
     line.replacen(PAGE, &page, 1)
 }
 
-/// The part of WestPlay a process is: the app itself, the part WebView2 named it, else by the browser it's
+/// The part of WestPlay a process is (Windows' process tree): the app itself, the part WebView2 named it, else by the browser it's
 /// under. A WebView2 browser WestPlay started that isn't one of the host's (`browsers`) is the companion
 /// window's own (Tauri's), and so is everything under it; the rest is "other" (a process WebView2 hasn't
 /// named yet, or can't: older runtimes).
+#[cfg_attr(not(windows), allow(dead_code))]
 fn part_of(
     pid: u32,
     ours: u32,
@@ -371,29 +291,8 @@ fn part_of(
     "other"
 }
 
-/// Every process's id and its parent's, as Windows lists them now.
-fn process_tree() -> Vec<(u32, u32)> {
-    let mut parents: Vec<(u32, u32)> = Vec::new();
-    // SAFETY: a snapshot of the process list, walked with an entry sized as the calls require, then closed.
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else { return parents };
-        let mut entry = PROCESSENTRY32W { dwSize: size_of::<PROCESSENTRY32W>() as u32, ..Default::default() };
-        let mut more = Process32FirstW(snapshot, &mut entry).is_ok();
-        while more {
-            parents.push((entry.th32ProcessID, entry.th32ParentProcessID));
-            more = Process32NextW(snapshot, &mut entry).is_ok();
-        }
-        let _ = CloseHandle(snapshot);
-    }
-    parents
-}
-
-/// WestPlay's processes: its own and every one started from it (WebView2's), at any depth.
-fn processes() -> Vec<u32> {
-    descendants(std::process::id(), &process_tree())
-}
-
 /// `root` and every process below it in `parents` (each process's id and its parent's).
+#[cfg_attr(not(windows), allow(dead_code))]
 fn descendants(root: u32, parents: &[(u32, u32)]) -> Vec<u32> {
     let mut found = vec![root];
     let mut at = 0;
@@ -407,24 +306,6 @@ fn descendants(root: u32, parents: &[(u32, u32)]) -> Vec<u32> {
         at += 1;
     }
     found
-}
-
-/// Each process's processor time so far (100 ns units); one that can't be opened is left out.
-fn processor_times(pids: &[u32]) -> HashMap<u32, u64> {
-    let ticks = |time: FILETIME| (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
-    pids.iter()
-        .filter_map(|&pid| {
-            // SAFETY: a handle opened for a plain query and closed after it; the times are locals it writes.
-            unsafe {
-                let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-                let (mut created, mut exited, mut kernel, mut user) = Default::default();
-                let read = GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user);
-                let _ = CloseHandle(process);
-                read.ok()?;
-                Some((pid, ticks(kernel) + ticks(user)))
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]

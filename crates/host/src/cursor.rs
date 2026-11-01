@@ -16,9 +16,11 @@
 
 use std::time::{Duration, Instant};
 
+#[cfg(windows)]
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D_RECT_F, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_COLOR_F, D2D1_GRADIENT_STOP, D2D1_PIXEL_FORMAT,
 };
+#[cfg(windows)]
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET,
     D2D1_BITMAP_PROPERTIES1, D2D1_BUFFER_PRECISION_8BPC_UNORM, D2D1_COLOR_INTERPOLATION_MODE_STRAIGHT,
@@ -27,12 +29,18 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_RADIAL_GRADIENT_BRUSH_PROPERTIES, D2D1CreateFactory, ID2D1Bitmap1, ID2D1DeviceContext, ID2D1Factory1,
     ID2D1Geometry, ID2D1GeometrySink, ID2D1GradientStopCollection, ID2D1PathGeometry,
 };
+#[cfg(windows)]
 use windows::Win32::Graphics::Direct3D11::ID3D11Texture2D;
+#[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
+#[cfg(windows)]
 use windows::Win32::Graphics::Dxgi::{IDXGIDevice, IDXGISurface};
+#[cfg(windows)]
 use windows::core::{Interface, Result};
+#[cfg(windows)]
 use windows_numerics::{Matrix3x2, Vector2};
 
+#[cfg(windows)]
 use crate::gpu::Gpu;
 
 /// The dot's radius, its ring's width inside its edge, its shadow's offset down and blur (CSS's blur radius:
@@ -270,6 +278,7 @@ fn shadow_at(outside: f32, sigma: f32) -> f32 {
 }
 
 /// Draws the cursor with Direct2D onto the frame shared with the game, on the host's device.
+#[cfg(windows)]
 pub struct Painter {
     factory: ID2D1Factory1,
     context: ID2D1DeviceContext,
@@ -277,6 +286,7 @@ pub struct Painter {
     _target: ID2D1Bitmap1,
 }
 
+#[cfg(windows)]
 impl Painter {
     /// A painter for `texture` (the shared frame: a render target, B8G8R8A8), on `gpu`'s device.
     pub fn new(gpu: &Gpu, texture: &ID3D11Texture2D) -> Result<Self> {
@@ -389,6 +399,7 @@ impl Painter {
 }
 
 /// A layer seen `opacity` times, clipped to `mask` if given.
+#[cfg(windows)]
 fn layer(opacity: f32, mask: Option<ID2D1Geometry>) -> D2D1_LAYER_PARAMETERS1 {
     D2D1_LAYER_PARAMETERS1 {
         contentBounds: D2D_RECT_F { left: f32::MIN, top: f32::MIN, right: f32::MAX, bottom: f32::MAX },
@@ -402,13 +413,95 @@ fn layer(opacity: f32, mask: Option<ID2D1Geometry>) -> D2D1_LAYER_PARAMETERS1 {
 }
 
 /// Direct2D's colour for `colour`, its alpha straight (Direct2D's brushes and gradients premultiply themselves).
+#[cfg(windows)]
 fn straight(colour: Colour) -> D2D1_COLOR_F {
     D2D1_COLOR_F { r: colour.r, g: colour.g, b: colour.b, a: colour.a }
+}
+
+/// Draws `look` over `pixels` (a frame `width` x `height`, BGRA premultiplied, rows top first), the page squeezed
+/// into it `squeeze` times its height: as `Painter` draws it with Direct2D, worked out pixel by pixel (the frame is
+/// in memory on macOS, `capture.rs`). The shadow outside the dot only, the dot, its ring just inside its edge, all
+/// seen `look.opacity` times; each shape's edge smoothed over a pixel.
+#[cfg(target_os = "macos")]
+pub fn paint(pixels: &mut [u8], width: u32, height: u32, look: &Look, squeeze: f32) {
+    let (fill, ring, shadow) = colours(look);
+    let radius = RADIUS * look.scale;
+    let down = SHADOW_DOWN * look.scale;
+    let sigma = SHADOW_BLUR / 2.0 * look.scale;
+    let ring_width = RING * look.scale;
+    let reach = radius + down + 3.0 * sigma;
+    // The frame's rows and columns the cursor can reach (page pixels down are `squeeze` frame pixels).
+    let left = ((look.x - reach).floor().max(0.0) as u32).min(width);
+    let right = ((look.x + reach).ceil().max(0.0) as u32).min(width);
+    let top = (((look.y - reach) * squeeze).floor().max(0.0) as u32).min(height);
+    let bottom = (((look.y + reach) * squeeze).ceil().max(0.0) as u32).min(height);
+    let cover = |inside: f32| (inside + 0.5).clamp(0.0, 1.0);
+    for row in top..bottom {
+        let page_y = (row as f32 + 0.5) / squeeze;
+        for column in left..right {
+            let page_x = column as f32 + 0.5;
+            let from_centre = (page_x - look.x).hypot(page_y - look.y);
+            let dot = cover(radius - from_centre);
+            // Premultiplied colour of the cursor here, built up from below: shadow, fill, ring.
+            let (mut r, mut g, mut b, mut a) = (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+            let mut over = |colour: Colour, coverage: f32| {
+                let alpha = colour.a * coverage;
+                r = colour.r * alpha + r * (1.0 - alpha);
+                g = colour.g * alpha + g * (1.0 - alpha);
+                b = colour.b * alpha + b * (1.0 - alpha);
+                a = alpha + a * (1.0 - alpha);
+            };
+            let from_shadow = (page_x - look.x).hypot(page_y - look.y - down);
+            if from_shadow < radius + 3.0 * sigma {
+                over(black(shadow.a * shadow_at(from_shadow - radius, sigma)), 1.0 - dot);
+            }
+            over(fill, dot);
+            over(ring, cover(ring_width / 2.0 - (from_centre - (radius - ring_width / 2.0)).abs()));
+            let (r, g, b, a) = (r * look.opacity, g * look.opacity, b * look.opacity, a * look.opacity);
+            if a <= 0.0 {
+                continue;
+            }
+            let at = (row as usize * width as usize + column as usize) * 4;
+            let Some(pixel) = pixels.get_mut(at..at + 4) else { continue };
+            // BGRA, premultiplied: the cursor over what's there.
+            let blend = |under: u8, colour: f32| ((colour + under as f32 / 255.0 * (1.0 - a)) * 255.0).round() as u8;
+            pixel[0] = blend(pixel[0], b);
+            pixel[1] = blend(pixel[1], g);
+            pixel[2] = blend(pixel[2], r);
+            pixel[3] = blend(pixel[3], a);
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn paints_the_dot_its_ring_and_its_shadow_where_the_cursor_is() {
+        let (width, height) = (200u32, 200u32);
+        let mut pixels = vec![0u8; (width * height * 4) as usize];
+        let look = Look { x: 100.0, y: 100.0, opacity: 1.0, scale: 1.0, tone: 0.0, press: 0.0 };
+        paint(&mut pixels, width, height, &look, 1.0);
+        let at = |x: u32, y: u32| {
+            let i = ((y * width + x) * 4) as usize;
+            [pixels[i], pixels[i + 1], pixels[i + 2], pixels[i + 3]]
+        };
+        // The middle: the soft white fill (35% white over nothing).
+        let middle = at(100, 100);
+        assert!((middle[3] as i32 - 89).abs() <= 2 && middle[0] == middle[2], "{middle:?}");
+        // The ring, just inside the edge: brighter, near opaque.
+        assert!(at(100 + 21, 100)[3] > 200);
+        // The shadow below the dot, faint and dark; nothing far away.
+        let below = at(100, 100 + 24);
+        assert!(below[3] > 0 && below[3] < 120 && below[0] < 10, "{below:?}");
+        assert_eq!(at(5, 5), [0, 0, 0, 0]);
+        // Squeezed into a frame 0.8 its height, it's drawn there.
+        let mut squeezed = vec![0u8; (width * height * 4) as usize];
+        paint(&mut squeezed, width, height, &look, 0.8);
+        assert!(squeezed[((80 * width + 100) * 4 + 3) as usize] > 80);
+    }
 
     fn mouse(x: f32, y: f32, pressed: bool, used: bool) -> Mouse {
         Mouse { active: true, x, y, pressed, used }
@@ -512,6 +605,7 @@ mod tests {
     /// The real drawing, on this PC's GPU: the cursor over a dark and a light half, at rest, pressed and dark,
     /// the page squeezed as a tall page is; the pixels read back and saved as a picture (WESTPLAY_CURSOR_PNG,
     /// else the temporary folder's westplay-cursor.png) to look at.
+    #[cfg(windows)]
     #[test]
     #[ignore = "draws on the GPU"]
     fn draws_as_the_pages_cursor_looked() {

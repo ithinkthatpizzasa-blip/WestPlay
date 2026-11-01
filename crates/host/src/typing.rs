@@ -3,10 +3,6 @@
 //! PC's clipboard (the plugin, in the game, doesn't read it).
 
 use westplay_shared::{TypedKey, TypingState};
-use windows::Win32::Foundation::{HANDLE, HGLOBAL};
-use windows::Win32::System::DataExchange::{CloseClipboard, GetClipboardData, OpenClipboard};
-use windows::Win32::System::Memory::{GlobalLock, GlobalSize, GlobalUnlock};
-use windows::Win32::System::Ole::CF_UNICODETEXT;
 
 /// The most text a paste brings (the cabin's fields are a line long).
 const PASTE_MOST: usize = 500;
@@ -66,28 +62,9 @@ fn one_line(text: &str) -> String {
     line.trim().to_owned()
 }
 
-/// The text on the PC's clipboard, if any.
+/// The text on the PC's clipboard, if it holds any.
 pub fn clipboard_text() -> Option<String> {
-    // SAFETY: the clipboard is opened and closed on this thread around its data, which is read only while
-    // locked and only within the block's own size (its text ends at a nul, but another program's need not).
-    unsafe {
-        OpenClipboard(None).ok()?;
-        let text = (|| {
-            let HANDLE(data) = GetClipboardData(CF_UNICODETEXT.0 as u32).ok()?;
-            let memory = HGLOBAL(data);
-            let start = GlobalLock(memory) as *const u16;
-            if start.is_null() {
-                return None;
-            }
-            let units = GlobalSize(memory) / size_of::<u16>();
-            let length = (0..units).take_while(|&i| *start.add(i) != 0).count();
-            let text = String::from_utf16_lossy(std::slice::from_raw_parts(start, length));
-            let _ = GlobalUnlock(memory);
-            Some(text)
-        })();
-        let _ = CloseClipboard();
-        text
-    }
+    crate::os::clipboard_text()
 }
 
 #[cfg(test)]

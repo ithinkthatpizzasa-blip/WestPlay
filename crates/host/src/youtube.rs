@@ -727,7 +727,7 @@ impl YouTube {
     }
 
     /// Carries out the page's command (`Close` is the caller's: [`YouTube::close`]).
-    pub fn command(&self, command: &Command) -> windows::core::Result<()> {
+    pub fn command(&self, command: &Command) -> crate::webview::Result<()> {
         match command {
             Command::Show { x, y, width, height, crop } => {
                 self.pass(&Command::Crop { on: *crop })?;
@@ -779,7 +779,7 @@ impl YouTube {
         distance: f32,
         equalizer: Equalizer,
         spectrum: bool,
-    ) -> windows::core::Result<()> {
+    ) -> crate::webview::Result<()> {
         let mut cab = self.cab.borrow_mut();
         // The head first: the speakers' loudness is set from where it is as they're placed.
         if cab.1 != Some(head) && head.is_sound() {
@@ -808,7 +808,7 @@ impl YouTube {
     }
 
     /// Passes a command on to YouTube's page (held until it's there).
-    fn pass(&self, command: &Command) -> windows::core::Result<()> {
+    fn pass(&self, command: &Command) -> crate::webview::Result<()> {
         match self.outbox.borrow_mut().send(command) {
             Some(message) => self.view.post_json(&message),
             None => Ok(()),
@@ -817,7 +817,7 @@ impl YouTube {
 
     /// YouTube's page again, from its home page (signed in or out since, here or in YouTube Music, which shares
     /// the sign-in): it's owed the video and the rest again as it says it's there ([`Outbox::ready`]).
-    pub fn reload(&self) -> windows::core::Result<()> {
+    pub fn reload(&self) -> crate::webview::Result<()> {
         self.view.navigate("https://www.youtube.com/")
     }
 
@@ -1290,6 +1290,9 @@ mod tests {
 
     /// The sign-in window's life beside YouTube's page, on its profile: it opens on Google's sign-in, and
     /// closing it is told. Needs WebView2 and the network: `cargo test -p westplay-host -- --ignored sign_in`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "opens a window on the desktop"]
     fn opens_and_closes_the_sign_in_window() {
@@ -1332,6 +1335,9 @@ mod tests {
 
     /// The real thing: YouTube answers the app's questions, in the language asked. Needs the network and
     /// WebView2: `cargo test -p westplay-host -- --ignored answers`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "asks youtube.com"]
     fn answers_searches_suggestions_and_up_next() {
@@ -1467,6 +1473,9 @@ mod tests {
     /// The real thing: captions in the language chosen before a video, then none, and the quality held to
     /// what's chosen, then YouTube's own again, as YouTube's player reports them. Needs the network and
     /// WebView2: `cargo test -p westplay-host -- --ignored keeps_captions`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a video from youtube.com"]
     fn keeps_captions_and_quality_to_whats_chosen() {
@@ -1540,6 +1549,9 @@ mod tests {
     /// The real thing: the gear's settings on a video with dubbed audio (MrBeast's): its speeds and audio
     /// tracks told, a speed and another track taken, and the speed kept on the next video. Muted. Needs the
     /// network and WebView2: `cargo test -p westplay-host -- --ignored keeps_speed_and_audio_track`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays videos from youtube.com"]
     fn keeps_speed_and_audio_track() {
@@ -1599,6 +1611,9 @@ mod tests {
     /// Lucky"), louder in the ear on the side the head leans to, at the player's volume; muffled outside; and
     /// as it is in a truck whose speakers aren't known. Muted (what's measured is the page's own sound). Needs
     /// the network and WebView2: `cargo test -p westplay-host -- --ignored through_the_trucks_speakers`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a video from youtube.com"]
     fn plays_through_the_trucks_speakers() {
@@ -1733,6 +1748,9 @@ mod tests {
     /// The real thing: YouTube in a hidden WebView plays a music video muted, with no ad, and without the
     /// wait YouTube puts before it for the ad it carries (15 s: the video held back some 12 s). Needs the
     /// network and WebView2: `cargo test -p westplay-host -- --ignored plays_a_video`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a video from youtube.com"]
     fn plays_a_video_with_no_ad_in_a_hidden_webview() {
@@ -1811,6 +1829,9 @@ mod tests {
     /// YouTube's cookie consent answered before its first page, as Reject all answers it, and kept: a new
     /// profile has `SOCS` `CAE=` once YouTube's page has loaded (in the EU, its consent page would stand in for
     /// it otherwise; from elsewhere YouTube never asks, so this sees the answer kept, not the page skipped).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "asks youtube.com"]
     fn answers_youtubes_cookie_consent_before_it_asks() {
@@ -1848,6 +1869,9 @@ mod tests {
     /// and want to continue): plays all the same, as the player's own continue asks for it. A song's video a
     /// player couldn't play (owner 2026-10-27): Sagopa Kajmer's "Merhametine Dön (2021 Tek Edit)", or
     /// WESTPLAY_YOUTUBE_WARNED.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a video from youtube.com"]
     fn plays_a_video_youtube_warns_about() {
@@ -1886,6 +1910,9 @@ mod tests {
     /// The real thing: the picture over the whole page on the first video and on the next one (players, 2026-10-27:
     /// the next video shrank to the page's top left), each video element's box, styles and the player's said.
     /// Muted. Needs the network and WebView2: `cargo test -p westplay-host -- --ignored fills_the_page_on_the_next`.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays videos from youtube.com"]
     fn fills_the_page_on_the_next_video() {

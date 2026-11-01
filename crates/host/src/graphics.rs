@@ -5,13 +5,21 @@
 //! drawing from one GPU to another): the game's once it runs, before that Windows' high-performance GPU; or
 //! the one the player chose in the companion, if it's there. A different GPU than the one WebView2 was
 //! started on takes starting WebView2 again (lib.rs ends the host's run with [`GpuChanged`]).
+//!
+//! On macOS WebKit draws on the GPU macOS picks for it, and a Mac's GPUs are Metal's: they're listed (the
+//! companion shows them), each known by its registry id in place of a LUID, but there's no choosing one for the cab.
 
-use windows::Win32::Foundation::LUID;
-use windows::Win32::Graphics::Dxgi::{
-    CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IDXGIAdapter1, IDXGIFactory1,
-    IDXGIFactory6,
-};
-use windows::core::Interface;
+#[cfg(windows)]
+pub use windows::Win32::Foundation::LUID;
+
+/// A GPU's id this boot, as Windows' LUID has it (on macOS, its Metal registry id in the two halves).
+#[cfg(target_os = "macos")]
+#[allow(non_snake_case)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LUID {
+    pub LowPart: u32,
+    pub HighPart: i32,
+}
 
 /// A GPU: its id (what the player's choice is kept as: its PCI ids, the same from boot to boot, where a
 /// LUID isn't), its name, and its LUID this boot.
@@ -25,7 +33,13 @@ pub struct Adapter {
 }
 
 /// The PC's GPUs (not Windows' software one), the high-performance ones first, as Windows ranks them.
+#[cfg(windows)]
 pub fn adapters() -> Vec<Adapter> {
+    use windows::Win32::Graphics::Dxgi::{
+        CreateDXGIFactory1, DXGI_ADAPTER_FLAG_SOFTWARE, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IDXGIAdapter1,
+        IDXGIFactory1, IDXGIFactory6,
+    };
+    use windows::core::Interface;
     // SAFETY: plain DXGI calls with locals; the factory and adapters are released as they go.
     let listed: Vec<IDXGIAdapter1> = unsafe {
         let Ok(factory) = CreateDXGIFactory1::<IDXGIFactory1>() else { return Vec::new() };
@@ -53,6 +67,24 @@ pub fn adapters() -> Vec<Adapter> {
     adapters
 }
 
+/// The Mac's GPUs, as Metal lists them: the high-performance ones first (a discrete GPU before an integrated
+/// one, Metal's `lowPower`), each its registry id as its id and LUID.
+#[cfg(target_os = "macos")]
+pub fn adapters() -> Vec<Adapter> {
+    use objc2_metal::{MTLCopyAllDevices, MTLDevice};
+    let devices = MTLCopyAllDevices();
+    let mut listed: Vec<(bool, Adapter)> = devices
+        .iter()
+        .map(|device| {
+            let registry = device.registryID();
+            let luid = LUID { LowPart: registry as u32, HighPart: (registry >> 32) as i32 };
+            (device.isLowPower(), Adapter { id: format!("{registry:016x}"), name: device.name().to_string(), luid })
+        })
+        .collect();
+    listed.sort_by_key(|(low_power, _)| *low_power);
+    listed.into_iter().map(|(_, adapter)| adapter).collect()
+}
+
 pub fn same(a: LUID, b: LUID) -> bool {
     (a.HighPart, a.LowPart) == (b.HighPart, b.LowPart)
 }
@@ -70,7 +102,7 @@ pub fn choose(chosen: Option<&str>, game: Option<LUID>, current: Option<LUID>, a
         .or_else(|| adapters.first().map(|a| a.luid))
 }
 
-/// The browser argument that has WebView2 draw on `luid`.
+/// The browser argument that has WebView2 draw on `luid` (none on macOS, where WebKit isn't told).
 pub fn browser_argument(luid: LUID) -> String {
     format!("--use-adapter-luid={},{}", luid.HighPart, luid.LowPart)
 }
@@ -143,6 +175,7 @@ mod tests {
 
     #[test]
     fn lists_this_pcs_gpus_with_ids_that_tell_them_apart() {
+        assert!(!adapters().is_empty(), "no GPU listed");
         let adapters = adapters();
         let mut ids: Vec<&str> = adapters.iter().map(|a| a.id.as_str()).collect();
         ids.dedup();

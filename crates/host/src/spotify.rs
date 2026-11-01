@@ -466,7 +466,7 @@ impl Spotify {
         })
     }
 
-    pub fn command(&self, command: &Command) -> windows::core::Result<()> {
+    pub fn command(&self, command: &Command) -> crate::webview::Result<()> {
         match command {
             Command::Start => Ok(()),
             Command::SignIn => {
@@ -517,7 +517,7 @@ impl Spotify {
         distance: f32,
         equalizer: Equalizer,
         spectrum: bool,
-    ) -> windows::core::Result<()> {
+    ) -> crate::webview::Result<()> {
         let mut told = self.told.borrow_mut();
         // The head first: the speakers' loudness is set from where it is as they're placed.
         if told.head != Some(head) && head.is_sound() {
@@ -839,6 +839,9 @@ mod tests {
     /// A song's words, asked of the hidden web player as the cab asks them (a search's songs). Muted; only
     /// whether they're synced, how many lines there are and where they're from is printed (WESTPLAY_SPOTIFY_PROFILE:
     /// a signed-in profile, the player's own).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "asks open.spotify.com"]
     fn answers_a_songs_words() {
@@ -894,6 +897,9 @@ mod tests {
     /// A long playlist's songs past its first answer (a player's Liked Songs stopped at the first 50): signed
     /// out, in a profile of its own, a public playlist of more than 100 (WESTPLAY_SPOTIFY_PLAYLIST, else Spotify's
     /// All Out 80s), its next songs asked from where the first answer says they go on.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "asks open.spotify.com"]
     fn pages_a_long_playlist() {
@@ -941,6 +947,9 @@ mod tests {
     /// Scania S's speakers, heard from the driver's seat, across a Next; how loud each ear is printed every
     /// second, and it must not fall silent while playing (once, protected, it did). Muted: never heard
     /// (WESTPLAY_SPOTIFY_PROFILE: a signed-in profile, the player's own; WESTPLAY_SPOTIFY_QUERY: what to play).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays from open.spotify.com"]
     fn sounds_through_the_truck_speakers() {
@@ -1016,6 +1025,9 @@ mod tests {
     /// played on by the page's own button (the page's state at once), a pause and a play on sent one right after
     /// the other ending as the last asked, and a Next (WESTPLAY_SPOTIFY_PROFILE: a signed-in profile, a copy of
     /// the player's own; WESTPLAY_SPOTIFY_QUERY: what to play). Muted: never heard.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays from open.spotify.com"]
     fn plays_pauses_and_fades_in_its_own_page() {

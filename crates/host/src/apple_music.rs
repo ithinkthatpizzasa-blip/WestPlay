@@ -605,7 +605,7 @@ impl AppleMusic {
         distance: f32,
         equalizer: Equalizer,
         spectrum: bool,
-    ) -> windows::core::Result<()> {
+    ) -> crate::webview::Result<()> {
         let mut told = self.told.borrow_mut();
         // The head first: the speakers' loudness is set from where it is as they're placed.
         if told.head != Some(head) && head.is_sound() {
@@ -643,7 +643,7 @@ impl AppleMusic {
         Ok(())
     }
 
-    pub fn command(&self, command: &Command) -> windows::core::Result<()> {
+    pub fn command(&self, command: &Command) -> crate::webview::Result<()> {
         match command {
             Command::SignIn => {
                 self.open_sign_in();
@@ -933,6 +933,9 @@ mod tests {
 
     /// How long playing takes in the hidden WebView, Apple Music's previews (signed out): a play, then next
     /// and previous, each timed from the page's command to the song's time moving.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays from music.apple.com"]
     fn times_playing_in_the_hidden_web_player() {
@@ -1044,6 +1047,9 @@ mod tests {
 
     /// Paused mid-second and played on, the song's time carries on from where it paused: the page never says
     /// a time behind it (nor a whole second for a time between).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays from music.apple.com"]
     fn plays_on_from_where_it_paused() {
@@ -1232,6 +1238,9 @@ mod tests {
     /// A song's words, asked of the hidden web player as the cab asks them: of the Library's songs (by their Apple
     /// Music ones) and of Apple Music's (a search's). Muted; only whether they're synced and how many lines and
     /// writers there are is printed (WESTPLAY_APPLE_MUSIC_PROFILE: a signed-in profile, the player's own).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "asks music.apple.com"]
     fn answers_a_songs_words() {

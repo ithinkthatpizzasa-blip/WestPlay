@@ -9,8 +9,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use windows::Win32::System::SystemInformation::GetLocalTime;
-
 static FILE: Mutex<Option<File>> = Mutex::new(None);
 
 /// Where this run's `app.log` is, once [`init`] made it.
@@ -26,7 +24,7 @@ pub fn dir() -> Option<PathBuf> {
 /// player's ransomware protection (Windows Security's Controlled folder access, 2026-10-24) let the game write
 /// its `plugin.log` in Documents but not WestPlay: there was no `app.log`, and nothing said why.
 fn fallback_dir() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var_os("LOCALAPPDATA")?).join("app.westplay").join("logs"))
+    Some(crate::os::app_data()?.join("logs"))
 }
 
 /// Where this run's `app.log` is (the companion's About shows it); `None` if it couldn't be made anywhere.
@@ -85,10 +83,8 @@ pub fn write(line: &str) {
     println!("{line}");
     let mut file = FILE.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(file) = file.as_mut() {
-        // SAFETY: a plain query of the time.
-        let now = unsafe { GetLocalTime() };
-        let _ =
-            writeln!(file, "{:02}:{:02}:{:02}.{:03}  {line}", now.wHour, now.wMinute, now.wSecond, now.wMilliseconds);
+        let now = crate::os::local_time();
+        let _ = writeln!(file, "{:02}:{:02}:{:02}.{:03}  {line}", now.hour, now.minute, now.second, now.millisecond);
     }
 }
 

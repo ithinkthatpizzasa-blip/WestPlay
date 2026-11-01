@@ -5,6 +5,8 @@
 //! Every WebView of the thread renders onto one [`Stage`]: its visuals, in their order (the cabin page on
 //! top, YouTube's player under it while it plays), make up the frame that is captured.
 
+use super::{Error, Failure, MouseButtons, MouseKind, PageSize, fitted, host_of};
+
 use std::cell::{Cell, RefCell};
 use std::path::Path;
 use std::rc::Rc;
@@ -13,8 +15,8 @@ use std::time::{Duration, Instant};
 
 use webview2_com::Microsoft::Web::WebView2::Win32::{
     COREWEBVIEW2_COLOR, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_ALLOW, COREWEBVIEW2_HOST_RESOURCE_ACCESS_KIND_DENY_CORS,
-    COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS, COREWEBVIEW2_PROCESS_FAILED_KIND,
-    COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED, COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
+    COREWEBVIEW2_PROCESS_FAILED_KIND, COREWEBVIEW2_PROCESS_FAILED_KIND_BROWSER_PROCESS_EXITED,
+    COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED,
     COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE, CreateCoreWebView2EnvironmentWithOptions,
     ICoreWebView2, ICoreWebView2_2, ICoreWebView2_3, ICoreWebView2CompositionController, ICoreWebView2Controller,
     ICoreWebView2Controller2, ICoreWebView2Controller3, ICoreWebView2Environment, ICoreWebView2Environment3,
@@ -37,7 +39,8 @@ use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WI
 use windows::core::{HSTRING, Interface, PCWSTR, PWSTR, w};
 use windows_numerics::Vector2;
 
-pub type Error = Box<dyn std::error::Error>;
+/// What a WebView2 call fails with.
+pub type Result<T, E = windows::core::Error> = std::result::Result<T, E>;
 
 /// Where the WebViews' hidden host windows are (both coordinates): beyond any monitor's (Windows parks
 /// minimized windows there too).
@@ -97,17 +100,6 @@ pub fn wait_for_browsers(timeout: Duration) {
     }
 }
 
-/// A WebView2 process that failed, as far as it matters to WestPlay (the others, such as its GPU process,
-/// WebView2 restarts by itself).
-/// Ordered by how much they take to recover from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Failure {
-    /// The page's own process exited or stopped responding: the page is gone (blank) until reloaded.
-    Page,
-    /// The browser process exited: the whole WebView is gone and must be created again.
-    Browser,
-}
-
 /// The frame the thread's WebViews render onto, `width` x `height`: one compositor, and the visual that is
 /// captured, holding each WebView's visual.
 pub struct Stage {
@@ -121,9 +113,6 @@ pub struct Stage {
     page: ContainerVisual,
     page_size: PageSize,
 }
-
-/// The page's size (width, height), as the stage has it now: the players keep their videos within it.
-pub type PageSize = Rc<Cell<(u32, u32)>>;
 
 impl Stage {
     pub fn new(width: u32, height: u32) -> Result<Self, Error> {
@@ -153,18 +142,18 @@ impl Stage {
     }
 
     /// The whole frame, for capture.
-    pub fn visual(&self) -> windows::core::Result<Visual> {
+    pub fn visual(&self) -> Result<Visual> {
         self.root.cast()
     }
 
     /// Puts a WebView's visual on the frame: over the rest, or under it.
-    pub fn add(&self, view: &OffscreenWebView, on_top: bool) -> windows::core::Result<()> {
+    pub fn add(&self, view: &OffscreenWebView, on_top: bool) -> Result<()> {
         let children = self.page.Children()?;
         if on_top { children.InsertAtTop(&view.root) } else { children.InsertAtBottom(&view.root) }
     }
 
     /// Takes a WebView's visual off the frame (before it's dropped).
-    pub fn remove(&self, view: &OffscreenWebView) -> windows::core::Result<()> {
+    pub fn remove(&self, view: &OffscreenWebView) -> Result<()> {
         self.page.Children()?.Remove(&view.root)
     }
 
@@ -176,7 +165,7 @@ impl Stage {
     /// Lays what's on the frame out `height` tall (the frame's width), squeezed into the frame's height when
     /// it's taller: a screen the game shows the frame on in another shape stretches it back
     /// (`westplay_shared::page_height`). The WebViews on it are sized by their owners.
-    pub fn set_page_height(&self, height: u32) -> windows::core::Result<()> {
+    pub fn set_page_height(&self, height: u32) -> Result<()> {
         let (width, frame_height) = self.frame;
         self.page.SetSize(Vector2 { X: width as f32, Y: height as f32 })?;
         let squeeze = frame_height as f32 / height as f32;
@@ -326,7 +315,7 @@ impl OffscreenWebView {
     /// with the browser's reason (a name not found, a connection cut: what a DNS or a VPN in the way shows),
     /// and its processes failing (owner 2026-10-21: a player's YouTube never opened, and the log said
     /// nothing). Of the page's address, only its host.
-    pub fn log_as(&self, name: &'static str) -> windows::core::Result<()> {
+    pub fn log_as(&self, name: &'static str) -> Result<()> {
         use webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_WEB_ERROR_STATUS;
         use webview2_com::NavigationCompletedEventHandler;
         use windows::core::BOOL;
@@ -370,13 +359,13 @@ impl OffscreenWebView {
     }
 
     /// Loads the page again (after its process failed).
-    pub fn reload(&self) -> windows::core::Result<()> {
+    pub fn reload(&self) -> Result<()> {
         // SAFETY: the WebView is alive as long as `self`.
         unsafe { self.webview.Reload() }
     }
 
     /// Where on the stage the WebView shows, and its size: the page lays itself out at that size.
-    pub fn place(&self, x: f32, y: f32, width: u32, height: u32) -> windows::core::Result<()> {
+    pub fn place(&self, x: f32, y: f32, width: u32, height: u32) -> Result<()> {
         self.root.SetOffset(windows_numerics::Vector3 { X: x, Y: y, Z: 0.0 })?;
         self.root.SetScale(windows_numerics::Vector3 { X: 1.0, Y: 1.0, Z: 1.0 })?;
         self.root.SetSize(Vector2 { X: width as f32, Y: height as f32 })?;
@@ -387,7 +376,7 @@ impl OffscreenWebView {
     /// The page laid out large, in the shape of the rectangle `x, y, width, height` of the stage and as big
     /// as fits in `room` (width, height), its picture shrunk evenly into the rectangle: a small view of a
     /// page that stays large (a video there keeps its quality, and its shape: it's contained in the page).
-    pub fn fit(&self, room: (u32, u32), x: f32, y: f32, width: u32, height: u32) -> windows::core::Result<()> {
+    pub fn fit(&self, room: (u32, u32), x: f32, y: f32, width: u32, height: u32) -> Result<()> {
         let (page_width, page_height, scale) = fitted(room, width, height);
         self.place(x, y, page_width, page_height)?;
         self.root.SetScale(windows_numerics::Vector3 { X: scale, Y: scale, Z: 1.0 })
@@ -402,7 +391,7 @@ impl OffscreenWebView {
     /// once they're gone: a page loaded after this is signed out. (Deleting them through the cookie manager only
     /// starts it: a page loaded straight after could still find the sign-in, and say so.) Cookies only: the
     /// cabin page shares a profile with YouTube's, and keeps its settings in its own storage.
-    pub fn delete_cookies(&self) -> windows::core::Result<()> {
+    pub fn delete_cookies(&self) -> Result<()> {
         use webview2_com::ClearBrowsingDataCompletedHandler;
         use webview2_com::Microsoft::Web::WebView2::Win32::{
             COREWEBVIEW2_BROWSING_DATA_KINDS_COOKIES, ICoreWebView2_13, ICoreWebView2Profile2,
@@ -492,14 +481,14 @@ impl OffscreenWebView {
     }
 
     /// Whether the WebView shows on the stage (hidden, its page runs on: a video still plays its sound).
-    pub fn show(&self, shown: bool) -> windows::core::Result<()> {
+    pub fn show(&self, shown: bool) -> Result<()> {
         self.root.SetIsVisible(shown)
     }
 
     /// Mutes the WebView's sound where it leaves for the PC's speakers (its page still makes it: what the
     /// page measures of it is as it was).
     #[cfg(test)]
-    pub fn set_muted(&self, muted: bool) -> windows::core::Result<()> {
+    pub fn set_muted(&self, muted: bool) -> Result<()> {
         use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_8;
         // SAFETY: the WebView is alive as long as `self`; a plain value.
         unsafe { self.webview.cast::<ICoreWebView2_8>()?.SetIsMuted(muted) }
@@ -548,7 +537,7 @@ impl OffscreenWebView {
 
     /// Runs `script` in the page, without waiting: `done` gets its result as JSON once WebView2 has it (nothing
     /// if the script couldn't run).
-    pub fn run_script(&self, script: &str, done: impl FnOnce(String) + 'static) -> windows::core::Result<()> {
+    pub fn run_script(&self, script: &str, done: impl FnOnce(String) + 'static) -> Result<()> {
         use webview2_com::ExecuteScriptCompletedHandler;
         let handler = ExecuteScriptCompletedHandler::create(Box::new(move |error, json| {
             if error.is_ok() {
@@ -582,17 +571,17 @@ impl OffscreenWebView {
     }
 
     /// Serves `folder` at `https://{host_name}/`, to the page served from it.
-    pub fn map_folder(&self, host_name: &str, folder: &Path) -> windows::core::Result<()> {
+    pub fn map_folder(&self, host_name: &str, folder: &Path) -> Result<()> {
         self.serve(host_name, folder, false)
     }
 
     /// Serves `folder` at `https://{host_name}/` to any page of the WebView's, fetched across origins too
     /// (the map's tiles, fetched by MapLibre's worker from the cabin page).
-    pub fn map_folder_to_any_page(&self, host_name: &str, folder: &Path) -> windows::core::Result<()> {
+    pub fn map_folder_to_any_page(&self, host_name: &str, folder: &Path) -> Result<()> {
         self.serve(host_name, folder, true)
     }
 
-    fn serve(&self, host_name: &str, folder: &Path, any_page: bool) -> windows::core::Result<()> {
+    fn serve(&self, host_name: &str, folder: &Path, any_page: bool) -> Result<()> {
         // WebView2 serves nothing from a folder named in Windows' long form (`\\?\C:\…`, as an installed
         // WestPlay's own folder comes): every file fails with ERR_INVALID_URL. Named plainly, it does.
         let folder = westplay_setup::places::plain(folder);
@@ -611,12 +600,12 @@ impl OffscreenWebView {
         }
     }
 
-    pub fn navigate(&self, url: &str) -> windows::core::Result<()> {
+    pub fn navigate(&self, url: &str) -> Result<()> {
         // SAFETY: the WebView is alive as long as `self`; the address lives through the call.
         unsafe { self.webview.Navigate(&HSTRING::from(url)) }
     }
 
-    pub fn navigate_to_string(&self, html: &str) -> windows::core::Result<()> {
+    pub fn navigate_to_string(&self, html: &str) -> Result<()> {
         // SAFETY: the WebView is alive as long as `self`; the page lives through the call.
         unsafe { self.webview.NavigateToString(&HSTRING::from(html)) }
     }
@@ -626,21 +615,33 @@ impl OffscreenWebView {
         std::mem::take(&mut self.page_messages.borrow_mut())
     }
 
-    pub fn post_json(&self, json: &str) -> windows::core::Result<()> {
+    pub fn post_json(&self, json: &str) -> Result<()> {
         // SAFETY: the WebView is alive as long as `self`; the message lives through the call.
         unsafe { self.webview.PostWebMessageAsJson(&HSTRING::from(json)) }
     }
 
-    /// Mouse input for the page, at `point` in page pixels (`data`: wheel delta, or which X button).
-    pub fn send_mouse(
-        &self,
-        kind: COREWEBVIEW2_MOUSE_EVENT_KIND,
-        keys: COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
-        data: u32,
-        point: POINT,
-    ) -> windows::core::Result<()> {
+    /// Mouse input for the page, at `x, y` in page pixels, `buttons` held (`data`: the wheel's delta).
+    pub fn send_mouse(&self, kind: MouseKind, buttons: MouseButtons, data: u32, x: i32, y: i32) -> Result<()> {
+        use webview2_com::Microsoft::Web::WebView2::Win32::*;
+        let kind = match kind {
+            MouseKind::Move => COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE,
+            MouseKind::Leave => COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE,
+            MouseKind::LeftDown => COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
+            MouseKind::LeftUp => COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP,
+            MouseKind::RightDown => COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN,
+            MouseKind::RightUp => COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_UP,
+            MouseKind::Wheel => COREWEBVIEW2_MOUSE_EVENT_KIND_WHEEL,
+        };
+        let mut keys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE.0;
+        if buttons.left {
+            keys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON.0;
+        }
+        if buttons.right {
+            keys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_RIGHT_BUTTON.0;
+        }
+        let point = POINT { x, y };
         // SAFETY: the composition controller is alive as long as `self`; plain values only.
-        unsafe { self.composition.SendMouseInput(kind, keys, data, point) }
+        unsafe { self.composition.SendMouseInput(kind, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS(keys), data, point) }
     }
 }
 
@@ -654,14 +655,6 @@ impl Drop for OffscreenWebView {
     }
 }
 
-/// The page for [`OffscreenWebView::fit`]: `width` x `height` grown evenly until it fills `room` one way,
-/// and how much to shrink it by to be `width` x `height` again.
-fn fitted((room_width, room_height): (u32, u32), width: u32, height: u32) -> (u32, u32, f32) {
-    let (width, height) = (width.max(1) as f32, height.max(1) as f32);
-    let grow = (room_width as f32 / width).min(room_height as f32 / height).max(1.0);
-    ((width * grow).round() as u32, (height * grow).round() as u32, 1.0 / grow)
-}
-
 /// What a WebView2 process failure means for WestPlay (Microsoft's guidance: reload after the page's
 /// process exits or hangs, create the WebView again after the browser process exits; WebView2 restarts its
 /// other processes itself, and a frame's process is no concern of a page without frames).
@@ -672,12 +665,6 @@ fn failure_of(kind: COREWEBVIEW2_PROCESS_FAILED_KIND) -> Option<Failure> {
         | COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_UNRESPONSIVE => Some(Failure::Page),
         _ => None,
     }
-}
-
-/// A page's address as the log gives it: only its host (`https://www.youtube.com/watch?v=…` → `www.youtube.com`).
-fn host_of(address: &str) -> &str {
-    let rest = address.split_once("://").map_or(address, |(_, rest)| rest);
-    rest.split(['/', '?', '#']).next().unwrap_or("")
 }
 
 /// Why a page didn't load, as WebView2 says it.
@@ -779,14 +766,6 @@ fn create_composition_controller(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn logs_only_a_pages_host() {
-        assert_eq!(host_of("https://www.youtube.com/watch?v=abc&t=1"), "www.youtube.com");
-        assert_eq!(host_of("https://open.spotify.com"), "open.spotify.com");
-        assert_eq!(host_of("https://music.apple.com?x=1"), "music.apple.com");
-        assert_eq!(host_of("about:blank"), "about:blank");
-    }
 
     /// A built cab page (`WESTPLAY_UI`: the folder with `cabin.html`, as installed) served and loaded as the
     /// host does, and what it says: whether its scripts ran, and every error on the way.
@@ -957,7 +936,7 @@ mod tests {
                  setInterval(() => cab.tick(), 250)\n\
                  window.level = () => cab.level()\n\
                  </script>",
-                include_str!("cab_sound.js")
+                include_str!("../cab_sound.js")
             ),
         )
         .unwrap();
@@ -989,17 +968,6 @@ mod tests {
         assert_eq!(heard, [true, true, true], "silent through the speakers at some point (a, b, then a again)");
     }
 
-    #[test]
-    fn fits_a_small_view_in_its_own_shape() {
-        // A 16:9 card on a 16:9 screen: the whole screen, shrunk.
-        assert_eq!(fitted((1280, 720), 142, 80), (1278, 720, 80.0 / 720.0));
-        // A 16:9 card on a squarer screen: as wide as the screen, in the card's shape.
-        let (w, h, scale) = fitted((1024, 768), 160, 90);
-        assert_eq!((w, h), (1024, 576));
-        assert!((w as f32 * scale - 160.0).abs() < 0.5 && (h as f32 * scale - 90.0).abs() < 0.5);
-        // Never grown past the screen, nor shrunk below the view's own size.
-        assert_eq!(fitted((1280, 720), 2000, 1000).2, 1.0);
-    }
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         COREWEBVIEW2_PROCESS_FAILED_KIND_FRAME_RENDER_PROCESS_EXITED,
         COREWEBVIEW2_PROCESS_FAILED_KIND_GPU_PROCESS_EXITED,

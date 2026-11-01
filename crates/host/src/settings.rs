@@ -139,23 +139,10 @@ impl KeyCode {
         self.0
     }
 
-    /// A keyboard key's name as Windows gives it for the player's keyboard ("Right Ctrl", "Num 4", "Q"):
-    /// the companion's keybinds. `None` for a mouse button, or a key Windows has no name for.
+    /// A keyboard key's name as Windows gives it for the player's keyboard ("Right Ctrl", "Num 4", "Q"; a Mac's
+    /// own names there): the companion's keybinds. `None` for a mouse button, or a key with no name.
     pub fn name(code: u32) -> Option<String> {
-        use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyNameTextW, MAPVK_VK_TO_VSC_EX, MapVirtualKeyW};
-        // SAFETY: plain queries; the buffer is a local the call writes within its length.
-        unsafe {
-            // The scan code, 0xE0xx for an extended key (right Ctrl and Alt, the arrows, Insert...).
-            let scancode = MapVirtualKeyW(code, MAPVK_VK_TO_VSC_EX);
-            if scancode == 0 {
-                return None;
-            }
-            let extended = i32::from(scancode & 0xff00 == 0xe000);
-            let lparam = ((scancode & 0xff) as i32) << 16 | extended << 24;
-            let mut name = [0u16; 64];
-            let length = usize::try_from(GetKeyNameTextW(lparam, &mut name)).ok().filter(|&n| n > 0)?;
-            Some(String::from_utf16_lossy(&name[..length]))
-        }
+        crate::os::key_name(code)
     }
 
     /// The four keys the first versions offered, by the names they saved.

@@ -3,8 +3,8 @@
 //!
 //! The cursor lives in page pixels: mouse movement moves it across the screen, whatever truck or camera, and
 //! clicks and the wheel reach the page as ordinary mouse events at its position. The host draws the cursor
-//! (`cursor.rs`) where this puts it, into the frame the game takes, as it moves: WebView2 renders no system
-//! cursor offscreen, and the page's own showed late.
+//! (`cursor.rs`) where this puts it, into the frame the game takes, as it moves: WebView2 (or WKWebView) renders
+//! no system cursor offscreen, and the page's own showed late.
 //!
 //! Movement is accelerated (precise when the hand moves slowly, quick across the screen when it moves fast),
 //! and a pressed button holds the cursor still until the mouse really drags, so a click lands where it was
@@ -13,19 +13,10 @@
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant};
 
-use webview2_com::Microsoft::Web::WebView2::Win32::{
-    COREWEBVIEW2_MOUSE_EVENT_KIND, COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE, COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
-    COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP, COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE,
-    COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN, COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_UP,
-    COREWEBVIEW2_MOUSE_EVENT_KIND_WHEEL, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS,
-    COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON, COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE,
-    COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_RIGHT_BUTTON,
-};
 use westplay_shared::PointerBlock;
-use windows::Win32::Foundation::POINT;
 
 use crate::cursor::Mouse;
-use crate::webview::OffscreenWebView;
+use crate::webview::{MouseButtons, MouseKind, OffscreenWebView};
 
 /// Page pixels per mouse count at rest, at sensitivity 1 (the player's sensitivity scales the whole curve).
 const BASE_GAIN: f32 = 1.3;
@@ -110,8 +101,7 @@ impl Pointer {
         };
         let buttons = self.buttons;
         for (kind, data) in self.step(input, Instant::now()) {
-            let point = POINT { x: self.x as i32, y: self.y as i32 };
-            let _ = webview.send_mouse(kind, self.virtual_keys(), data, point);
+            let _ = webview.send_mouse(kind, self.held(), data, self.x as i32, self.y as i32);
         }
         Mouse {
             active: self.active,
@@ -123,13 +113,13 @@ impl Pointer {
     }
 
     /// Applies one batch of input; returns the mouse events for the page, in order.
-    fn step(&mut self, input: Input, now: Instant) -> Vec<(COREWEBVIEW2_MOUSE_EVENT_KIND, u32)> {
+    fn step(&mut self, input: Input, now: Instant) -> Vec<(MouseKind, u32)> {
         let mut events = Vec::new();
         if !input.active {
             if self.active {
                 self.active = false;
                 self.set_buttons(0, &mut events);
-                events.push((COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE, 0));
+                events.push((MouseKind::Leave, 0));
             }
             self.last_movement = None;
             return events;
@@ -139,12 +129,13 @@ impl Pointer {
 
         // Movement first: in a batch, the hand moved before it clicked.
         if self.apply_movement(input.dx, input.dy, now) || entered {
-            events.push((COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE, 0));
+            events.push((MouseKind::Move, 0));
         }
         self.set_buttons(input.buttons, &mut events);
         if input.wheel != 0 {
-            // DirectInput and WebView2 both count 120 per wheel notch, positive away from the user.
-            events.push((COREWEBVIEW2_MOUSE_EVENT_KIND_WHEEL, input.wheel as u32));
+            // DirectInput and WebView2 both count 120 per wheel notch, positive away from the user (and so the
+            // macOS plugin's wheel, and its WebView's, from them).
+            events.push((MouseKind::Wheel, input.wheel as u32));
         }
         events
     }
@@ -177,18 +168,10 @@ impl Pointer {
         moved
     }
 
-    fn set_buttons(&mut self, buttons: u32, events: &mut Vec<(COREWEBVIEW2_MOUSE_EVENT_KIND, u32)>) {
+    fn set_buttons(&mut self, buttons: u32, events: &mut Vec<(MouseKind, u32)>) {
         for (bit, down, up) in [
-            (
-                PointerBlock::LEFT,
-                COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN,
-                COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP,
-            ),
-            (
-                PointerBlock::RIGHT,
-                COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN,
-                COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_UP,
-            ),
+            (PointerBlock::LEFT, MouseKind::LeftDown, MouseKind::LeftUp),
+            (PointerBlock::RIGHT, MouseKind::RightDown, MouseKind::RightUp),
         ] {
             if buttons & bit != self.buttons & bit {
                 self.buttons ^= bit;
@@ -202,20 +185,14 @@ impl Pointer {
         };
     }
 
-    fn virtual_keys(&self) -> COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS {
-        let mut keys = COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_NONE.0;
-        if self.buttons & PointerBlock::LEFT != 0 {
-            keys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_LEFT_BUTTON.0;
-        }
-        if self.buttons & PointerBlock::RIGHT != 0 {
-            keys |= COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS_RIGHT_BUTTON.0;
-        }
-        COREWEBVIEW2_MOUSE_EVENT_VIRTUAL_KEYS(keys)
+    /// The buttons held, as the page's mouse events carry them.
+    fn held(&self) -> MouseButtons {
+        MouseButtons { left: self.buttons & PointerBlock::LEFT != 0, right: self.buttons & PointerBlock::RIGHT != 0 }
     }
 }
 
-const LEFT_DOWN: COREWEBVIEW2_MOUSE_EVENT_KIND = COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_DOWN;
-const RIGHT_DOWN: COREWEBVIEW2_MOUSE_EVENT_KIND = COREWEBVIEW2_MOUSE_EVENT_KIND_RIGHT_BUTTON_DOWN;
+const LEFT_DOWN: MouseKind = MouseKind::LeftDown;
+const RIGHT_DOWN: MouseKind = MouseKind::RightDown;
 
 #[cfg(test)]
 mod tests {
@@ -289,7 +266,7 @@ mod tests {
         assert!(events.is_empty());
         assert_eq!((pointer.x, pointer.y), (x, y));
         let events = pointer.step(input(0, 0, 0), now);
-        assert_eq!(events, vec![(COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP, 0)]);
+        assert_eq!(events, vec![(MouseKind::LeftUp, 0)]);
     }
 
     #[test]
@@ -299,7 +276,7 @@ mod tests {
         pointer.step(input(0, 0, 0), now);
         pointer.step(input(0, 0, PointerBlock::LEFT), now);
         let events = pointer.step(input(40, 0, PointerBlock::LEFT), now);
-        assert_eq!(events, vec![(COREWEBVIEW2_MOUSE_EVENT_KIND_MOVE, 0)]);
+        assert_eq!(events, vec![(MouseKind::Move, 0)]);
         assert!(pointer.x > 640.0);
     }
 
@@ -309,9 +286,6 @@ mod tests {
         let mut pointer = Pointer::new(1280, 720);
         pointer.step(input(0, 0, PointerBlock::LEFT), now);
         let events = pointer.step(Input::default(), now);
-        assert_eq!(
-            events,
-            vec![(COREWEBVIEW2_MOUSE_EVENT_KIND_LEFT_BUTTON_UP, 0), (COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE, 0)]
-        );
+        assert_eq!(events, vec![(MouseKind::LeftUp, 0), (MouseKind::Leave, 0)]);
     }
 }

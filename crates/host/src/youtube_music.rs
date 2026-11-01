@@ -886,7 +886,7 @@ impl YouTubeMusic {
         distance: f32,
         equalizer: Equalizer,
         spectrum: bool,
-    ) -> windows::core::Result<()> {
+    ) -> crate::webview::Result<()> {
         let mut told = self.told.borrow_mut();
         // The head first: the speakers' loudness is set from where it is as they're placed.
         if told.head != Some(head) && head.is_sound() {
@@ -924,7 +924,7 @@ impl YouTubeMusic {
         Ok(())
     }
 
-    pub fn command(&self, command: &Command) -> windows::core::Result<()> {
+    pub fn command(&self, command: &Command) -> crate::webview::Result<()> {
         match command {
             Command::SignIn => {
                 self.open_sign_in();
@@ -966,7 +966,7 @@ impl YouTubeMusic {
     }
 
     /// The page again (signed in or out elsewhere: YouTube's page shares the sign-in).
-    pub fn reload(&self) -> windows::core::Result<()> {
+    pub fn reload(&self) -> crate::webview::Result<()> {
         self.view.navigate(HOME)
     }
 
@@ -1351,6 +1351,7 @@ mod tests {
 
     /// What an answer holds, in a line: its sections' styles and sizes, its first titles (YouTube Music's
     /// catalogue, never an account's).
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn summary(answer: &Answer) -> String {
         let shelves = |page: &Page| {
             page.sections
@@ -1433,6 +1434,9 @@ mod tests {
     /// player's (2026-10-27: loading, then paused at 0 s, again and again) plays, its sound running on. Muted. Needs
     /// the network and WebView2: `cargo test -p westplay-host -- --ignored plays_a_song_youtube_warns_about`, or
     /// another song by WESTPLAY_YOUTUBE_WARNED.
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a song from music.youtube.com"]
     fn plays_a_song_youtube_warns_about() {
@@ -1509,6 +1513,9 @@ mod tests {
 
     /// A music video's picture as Now Playing shows it (the page scaled into a small rectangle of the screen):
     /// where the page lays its video out, measured, and the page photographed (`WESTPLAY_CAPTURE`, a folder).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays a music video from music.youtube.com"]
     fn a_music_videos_picture_fills_its_rectangle() {
@@ -1578,6 +1585,9 @@ mod tests {
     /// YouTube Music in the hidden WebView, signed out (a fresh profile, deleted after): every question answered,
     /// then a play, next, previous, pause, play on, seek, repeat, shuffle and a jump, each said once where it ends
     /// up (never paused on the way to the next song).
+    // WebView2 and its COM thread: the real browser, on Windows (WebKit's needs the main thread's run loop,
+    // which the test harness holds).
+    #[cfg(windows)]
     #[test]
     #[ignore = "plays from music.youtube.com"]
     fn answers_and_plays_in_the_hidden_web_player() {
