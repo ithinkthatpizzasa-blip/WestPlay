@@ -68,9 +68,11 @@ The game has two rendering devices:
   `r_macgl_*` settings. Apple's OpenGL runs on Metal underneath (`AppleMetalOpenGLRenderer.bundle` is loaded).
 - **Vulkan through MoltenVK**: the executable imports `vkCreateInstance`/`vkGetInstanceProcAddr` and logs `[vk] …`
   lines, and has a `ns_vulkan_view_t`. The device can be chosen on the command line (`-rdevice` / `-r_device`,
-  `[gfx] Render device override: %s`), but its name isn't known yet: launching `eurotrucks2` directly hands off to
-  Steam and drops the arguments, so trying it needs a Steam launch option. **Open: ask the owner to try
-  `-rdevice vk` and `-rdevice vulkan` as launch options.**
+  `[gfx] Render device override: %s`). Its name is **`vk`**: a launch with `-rdevice vk` (2026-11-01) logged
+  `[gfx] Render device override: vk`, `[vk] 0: Apple M1 Max 0.0 (integrated) (1.2.296)`, `VK_EXT_metal_surface`.
+  It runs, but **drew the menu magnified, only its top-left part on the screen** (fullscreen at 3456 × 2234 on
+  the Retina display), so it's not something players would use as it is; the setting isn't kept (`config.cfg`
+  still has `r_device ""` after it). Vulkan support is left out unless that changes.
 
 How the game reaches OpenGL: it **resolves GL functions at run time** (`dlopen` of
 `/System/Library/Frameworks/OpenGL.framework/Versions/Current/Libraries/libGL.dylib` and `dlsym`, the names
@@ -178,7 +180,7 @@ Sources: [unofficial TruckersMP macOS launcher](https://github.com/matyash12/uno
 
 ### Still open from Phase 0
 
-- The Vulkan device's name and whether it runs (needs a Steam launch option: the owner).
+- (Done: the Vulkan device is `vk`; it runs but draws magnified on the Retina display.)
 - Which thread draws, and whether the CGL context on the SDK's frame events is the drawing one (frame events
   need a profile loaded and driving: the owner, or the next in-game session).
 - `sdk reload` / `sdk unload` in the console (Phase 3, with the real plugin).
