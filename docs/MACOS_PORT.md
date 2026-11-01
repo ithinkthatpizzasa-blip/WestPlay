@@ -370,3 +370,38 @@ Two WKWebViews in one window, a player (Apple's HLS sample) under a cabin page w
   go to what's under it), `sharingType = .none` (out of screenshots and screen sharing), on every Space, out of
   window cycling, at the desktop's level. There it draws, takes hover, clicks and the wheel, and is captured at 63
   frames/s as above (it counts as not visible to AppKit, and WebKit draws on with occlusion detection off).
+
+### The host on macOS (2026-11-01)
+
+Built as planned above; Windows' code moved behind the same APIs unchanged (`webview/`, `capture/`, `gpu/`,
+`signin/`, `performance/`, `os/`, each with `windows.rs` and `macos.rs`; `pointer.rs` and `cursor.rs` shared).
+
+- **Threads**: WebKit runs on the main thread (in the companion, Tauri's; in the standalone `westplay-host`, its
+  own AppKit loop), the host on its own thread as on Windows: each WebKit call is made on the main thread and
+  waited for (`dispatch2::run_on_main`); page messages, failures and scripts' results come back through queues the
+  host takes as it pumps.
+- **The pages' bridge**: `window.chrome.webview` on WestPlay's own pages; `window.__westplayWebview` on the services'
+  pages (a `window.chrome` there would tell a service it's in Chrome, whose DRM WebKit hasn't). The services'
+  scripts take either (`westplayWebview()`); the cabin UI's folders come from `hostFolder()` (`ui/src/shared`).
+- **Capture**: a round of snapshots at most 60 times a second, composited on the main thread, paced by the shared
+  mailbox, the cursor drawn per pixel as it goes out. A frame identical to the last isn't sent again, but the last
+  goes out every 500 ms while idle (a game starting meanwhile gets the screen, as Windows' shared texture keeps it).
+- **The game's memory** (the route, the in-game weather): not read from outside on macOS (it takes a debugger's
+  rights). The host says so in its log; both come back when the plugin reads them inside the game (Phase 3).
+
+Checked on this Mac:
+- `cargo test -p westplay-host`: 195 pass (the WebView2 tests that drive a real browser are Windows-only: WebKit
+  needs the main thread's run loop, which the test harness holds).
+- The standalone host on its test page: first frame 1.06 s after start, then 59–61 frames/s into the frame block;
+  another process reads them (178 in 3 s) and the frame is the page, whole, 1280 × 720.
+- The real cabin page (the UI's Vite dev server): renders (Dashboard, sidebar, Now Playing, the default wallpaper);
+  idle, it costs nothing but the 2 Hz resend.
+- UI tests: 445 pass. The services' scripts are tested by the UI's tests against stand-in pages (`spotifyPage` caught a
+  line the change broke: these scripts have no semicolons, so a line may never start with a bracket).
+- Windows: `cargo xwin check --workspace --all-targets` passes; clippy shows nothing new.
+
+**Not checked yet** (next): the cabin's apps used (clicking through needs pointer input: a stand-in for the plugin
+writing to the bridge, until Phase 3's plugin), Spotify, YouTube and YouTube Music inside the cabin (their own
+WebViews, a profile each, signed in through the sign-in window), YouTube's player under the page, the cab speaker
+sound (`cab_sound.js`, `speakers.rs`), and the companion app (Phase 4: its pickers' window handles and one
+Windows-only process flag).
