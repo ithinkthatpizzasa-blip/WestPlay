@@ -258,7 +258,7 @@ Checked on this Mac (the ignored tests, run by hand):
 x86_64-pc-windows-msvc` passes (shared, mapdata, setup, host, their tests included), and clippy shows nothing in
 the files changed.
 
-The plugin too, with `cargo-xwin` (Microsoft's C runtime and Windows SDK headers, fetched by it, its licence
+All of it, the plugin and the app too, with `cargo-xwin` (Microsoft's C runtime and Windows SDK headers, fetched by it, its licence
 accepted by the owner, 2026-11-01), compiling MinHook's C with Apple's own `clang`, and `llvm-lib` taken from
 Rust's `llvm-tools` (its `llvm-ar`, which works as `llvm-lib` when named so):
 
@@ -266,13 +266,16 @@ Rust's `llvm-tools` (its `llvm-ar`, which works as `llvm-lib` when named so):
 rustup component add llvm-tools
 mkdir -p ~/.local/westplay-xwin-bin
 ln -sf "$(find ~/.rustup/toolchains/stable-aarch64-apple-darwin -name llvm-ar -type f)" ~/.local/westplay-xwin-bin/llvm-lib
-PATH=~/.local/westplay-xwin-bin:$PATH cargo xwin check --workspace --exclude westplay-app --all-targets \
+PATH=~/.local/westplay-xwin-bin:$PATH cargo xwin check --workspace --all-targets \
     --target x86_64-pc-windows-msvc --cross-compiler clang
 ```
 
-passes. **Not checked from here:** `westplay-app`, whose build (Tauri's, for its Windows icon and version) runs
-`llvm-rc`, which neither Xcode nor Rust's tools have (LLVM's own release has it: 1.5 GB). Its Windows code isn't changed in Phase 1. The tests
-can't run here at all (Windows binaries); nor can the Windows-only tests (`#[cfg(windows)]`: the plain names,
+passes for the **whole workspace**, the app included. The app's build (Tauri's, for its Windows icon and version)
+runs `llvm-rc`, which neither Xcode nor Rust's tools have: it's taken from LLVM's own release (23.1.4,
+`LLVM-23.1.4-macOS-ARM64.tar.xz`, its SHA-256 checked against the release's attestation), `bin/llvm-rc` alone
+(self-contained, 0.8 MB), put beside `llvm-lib` in `~/.local/westplay-xwin-bin`. Clippy for Windows shows nothing in
+the files the port changed (only the `as_chunks` suggestions in files it hasn't touched, below). **Not run from
+here:** the tests, which are Windows programs; nor, so, the Windows-only tests (`#[cfg(windows)]`: the plain names,
 UAC, a loaded DLL in use, TruckersMP's paths).
 
 Other notes:
