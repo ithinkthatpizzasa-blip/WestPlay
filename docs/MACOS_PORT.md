@@ -494,3 +494,65 @@ frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` fo
     already said), on Windows too: 59 strings, the cabin's (English) and the companion's in 20 languages. Seen:
     "…on this computer.".
 - Bundling (`bundle.active` false, Windows' installer): the Mac's `.app` and its signing are still to do (Phase 4).
+
+## Phase 3: the plugin in the Mac game (2026-11-02)
+
+### How it hooks the game: tables, not code
+
+The game looks up its OpenGL functions by name once (`dlsym` of libGL's, kept in its own object: `glBindTexture` at
+`+0x990` of it in 1.57), and every one of libGL's functions calls on through the current context's dispatch table,
+the `disp` of a `CGLContextObj` (`CGLContext.h`, `gliDispatch.h`: the table `CGLMacro.h` compiles against, so a
+fixed layout). So the plugin hooks by pointing entries of the game's contexts' tables at its own functions, and
+changes none of the game's code (it runs with the hardened runtime, which may refuse changed code). Checked first
+with a small x86_64 program under Rosetta on this Mac (GL 4.1 Metal, Apple M1 Max): with its context's
+`bind_texture` and `tex_storage2D` entries pointed elsewhere, `glBindTexture` and `glTexStorage2D` (looked up by
+`dlsym`, as the game does) came through them.
+
+What else was read from the game's executable (`nm -u`, its strings):
+- It imports `CGLEnable`/`CGLSetParameter`…, `glFlush`, `glSwapAPPLE`, and uses `NSOpenGLContext`'s `flushBuffer`
+  and `CGLContextObj`: the plugin's frame clock is `-[NSOpenGLContext flushBuffer]` (an Objective-C method's
+  implementation swapped: data again), and the context it flushes is the one whose table is hooked.
+- Input: it pumps its own events (`nextEventMatchingMask:untilDate:inMode:dequeue:`, `sendEvent:`), reads the mouse's
+  `deltaX`/`deltaY` from them, warps and detaches the cursor (`CGWarpMouseCursorPosition`,
+  `CGAssociateMouseAndMouseCursorPosition`), and also listens to HID devices itself
+  (`IOHIDDeviceRegisterInputValueCallback`, `IOHIDRequestAccess`). Which of these its keys and mouse look come
+  through is to be seen in the game (3c).
+- It's built against the macOS 15.4 SDK with the classic dyld info (`LC_DYLD_INFO_ONLY`, no chained fixups).
+
+### The plugin (`crates/plugin`)
+
+Builds for `x86_64-apple-darwin` (`tools/build_plugin_macos.sh`: release, ad-hoc signed, as
+`target/release/westplay.dylib`, where the companion takes it from while developing). Windows' code is unchanged
+behind `cfg(windows)`; what both share is split out of it:
+
+| | Shared | Windows | macOS |
+|---|---|---|---|
+| `hooks` | the panic guards (`guarded`, `contained`) | MinHook (`hooks/windows.rs`) | an entry of a table pointed at the detour, put back on removal (`hooks/macos.rs`) |
+| `screens` | which screen shows WestPlay in which truck (`drawing`), the cab's mark, a truck changing | the textures in Direct3D 11, by their views (`screens/windows.rs`) | the textures in OpenGL, by their names (`screens/macos.rs`) |
+| Frame clock | | `IDXGISwapChain::Present` (`d3d.rs`) | `-[NSOpenGLContext flushBuffer]` (`gl.rs`) |
+| Frames | | the shared D3D11 texture (`frame.rs`) | the frame block (`westplay_shared::frames`), written into the texture with `glTexSubImage2D` |
+| Log | `Documents\WestPlay\logs` | | `~/Library/Application Support/WestPlay/logs` |
+
+On macOS a texture is known by its name: the first time the game binds one, its size and format are asked
+(`glGetTexLevelParameteriv`) and kept, in a table by name (a frame binds thousands). A screen texture is
+1280 × (720 + layout), `GL_SRGB8_ALPHA8`, one level, as on Windows. A name whose contents the game makes again
+(`tex_image2D`, `tex_storage2D`, `tex_sub_image2D`), or lets go (`delete_textures`), is asked again at its next bind.
+Each time a screen texture is bound and a newer app frame is there, it's written in through the game's own context,
+the context's unpacking state (unpack buffer, alignment, row length, skips) set for it and put back after.
+
+Not on macOS yet: input (`input`, `keyboard`, `keybinds`, `typing`: 3c), and what finds the game's own code
+(`camera`, `mod_mount`, `navigation`: 3d). TruckersMP's part is Windows only (no Mac client, Phase 0).
+
+### Checked without the game (`tools/macos_probe/bridge_peer`'s `harness`)
+
+The harness (x86_64, under Rosetta, as the game) loads the plugin into a process with a GL 4.1 context current and
+AppKit loaded, plays the app (heartbeat, the screen on, frames into the frame block, a DAF 2021 as the truck), makes
+the DAF 2021's screen texture (1280 × 721, sRGB, one level) with libGL's functions looked up by name, binds it as the
+game does to draw, and reads it back:
+- Each new frame is written in, its last row repeated in the texture's extra row; the game's unpack alignment (set
+  to 1 by it) is 1 again after.
+- Switched off: the texture transparent. A texture of the same size with two levels: left alone. A screen texture's
+  name let go and made a 64 × 64 texture: left alone, no error.
+- Shutdown: the context's table as it was.
+- Cost: a bind with a new frame, plus a `glFinish` to wait for the upload, 1.3–1.5 ms on average (7–8 ms at most,
+  the first); a bind with nothing new, under 1 µs. To measure in the game (the game doesn't wait for the upload).
