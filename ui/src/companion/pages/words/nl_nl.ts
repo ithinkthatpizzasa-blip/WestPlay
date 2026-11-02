@@ -205,7 +205,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'WestPlay verwijderen…',
     title: 'WestPlay verwijderen?',
-    text: 'WestPlay wordt uit je game en je profielen gehaald, en samen met je inloggegevens en logboeken van deze pc verwijderd.',
+    text: 'WestPlay wordt uit je game en je profielen gehaald, en samen met je inloggegevens en logboeken van deze computer verwijderd.',
     keep: 'Instellingen en kaarten bewaren',
     keepDetail: 'Een nieuwe installatie neemt ze weer over.',
     cancel: 'Annuleren',
@@ -218,7 +218,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'WestPlay uit je profielen halen',
       plugin: 'Plug-in verwijderen',
-      data: 'WestPlay van deze pc verwijderen',
+      data: 'WestPlay van deze computer verwijderen',
     },
     profilesFailed:
       '{n} van je profielen konden niet worden gewijzigd en bevatten WestPlay nog. Haal het daar weg in de Modmanager.',

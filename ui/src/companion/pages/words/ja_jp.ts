@@ -204,7 +204,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'WestPlay をアンインストール…',
     title: 'WestPlay をアンインストールしますか？',
-    text: 'WestPlay をゲームとプロフィールから外し、ログイン情報やログと一緒にこの PC から削除します。',
+    text: 'WestPlay をゲームとプロフィールから外し、ログイン情報やログと一緒にこのコンピュータから削除します。',
     keep: '設定とマップを残す',
     keepDetail: '再インストールすると、また使われます。',
     cancel: 'キャンセル',
@@ -217,7 +217,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'プロフィールから WestPlay を外しています',
       plugin: 'プラグインを削除しています',
-      data: 'この PC から WestPlay を削除しています',
+      data: 'このコンピュータから WestPlay を削除しています',
     },
     profilesFailed:
       '{n} 個のプロフィールを変更できず、まだ WestPlay が入っています。MOD マネージャーで外してください。',

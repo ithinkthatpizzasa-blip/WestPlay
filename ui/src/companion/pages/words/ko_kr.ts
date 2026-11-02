@@ -203,7 +203,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'WestPlay 제거…',
     title: 'WestPlay를 제거할까요?',
-    text: 'WestPlay를 게임과 프로필에서 빼고, 로그인 정보와 로그와 함께 이 PC에서 삭제해요.',
+    text: 'WestPlay를 게임과 프로필에서 빼고, 로그인 정보와 로그와 함께 이 컴퓨터에서 삭제해요.',
     keep: '설정과 지도 유지',
     keepDetail: '다시 설치하면 그대로 다시 써요.',
     cancel: '취소',
@@ -216,7 +216,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: '프로필에서 WestPlay를 빼는 중',
       plugin: '플러그인을 삭제하는 중',
-      data: '이 PC에서 WestPlay를 삭제하는 중',
+      data: '이 컴퓨터에서 WestPlay를 삭제하는 중',
     },
     profilesFailed: '프로필 {n}개를 바꾸지 못해 아직 WestPlay가 들어 있어요. MOD 관리자에서 빼 주세요.',
     banners: {

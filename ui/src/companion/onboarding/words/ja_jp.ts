@@ -20,7 +20,7 @@ export const words: Words = {
   game: {
     title: 'あなたのゲーム',
     titleMissing: 'ゲームはどこですか？',
-    found: 'WestPlay がこの PC で Euro Truck Simulator 2 を見つけました。',
+    found: 'WestPlay がこのコンピュータで Euro Truck Simulator 2 を見つけました。',
     foundMany: 'Euro Truck Simulator 2 が複数の場所にインストールされています。プレイしているものを選んでください。',
     missing:
       'WestPlay は Euro Truck Simulator 2 を見つけられませんでした。インストールしたフォルダ（base.scs が入っているフォルダ）を選んでください。',

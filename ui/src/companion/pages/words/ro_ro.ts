@@ -204,7 +204,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Dezinstalează WestPlay…',
     title: 'Dezinstalezi WestPlay?',
-    text: 'WestPlay este scos din jocul și profilurile tale și șters de pe acest PC împreună cu conectările și jurnalele tale.',
+    text: 'WestPlay este scos din jocul și profilurile tale și șters de pe acest computer împreună cu conectările și jurnalele tale.',
     keep: 'Păstrează setările și hărțile',
     keepDetail: 'O reinstalare le va folosi din nou.',
     cancel: 'Anulează',
@@ -217,7 +217,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'Se scoate WestPlay din profilurile tale',
       plugin: 'Se șterge pluginul',
-      data: 'Se șterge WestPlay de pe acest PC',
+      data: 'Se șterge WestPlay de pe acest computer',
     },
     profilesFailed:
       'Profilurile ({n}) nu au putut fi modificate și încă includ WestPlay. Scoate-l de acolo, din Managerul de mod-uri.',

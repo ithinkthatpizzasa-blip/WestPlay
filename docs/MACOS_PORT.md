@@ -468,7 +468,7 @@ frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` fo
   (`ui/src/cabSound.test.ts`). Apple Music's is the same (FairPlay); YouTube's and YouTube Music's aren't
   protected, and go through the speakers as on Windows. (Not chosen: fades by the element's `volume`; a Core
   Audio process tap, macOS 14.4+, with the speakers done natively.)
-- The cabin's sign-in note says "Finish signing in on your PC": to say "Mac" (or neither) on macOS.
+- The cabin's sign-in note said "Finish signing in on your PC": now "computer" (below).
 
 ### The companion app on macOS (2026-11-02)
 
@@ -489,6 +489,8 @@ frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` fo
     and the page shows it after two animation frames, which WebKit doesn't draw for a window not shown (WebView2
     does). The page now also shows it 200 ms after it's ready while it's hidden (`useShowWhenReady`): shown at
     1.2 s, drawn.
-  - Says "on this PC" ("WestPlay found Euro Truck Simulator 2 on this PC"), as the cabin's sign-in note does: the
-    words for macOS to do.
+  - It said "on this PC" ("WestPlay found Euro Truck Simulator 2 on this PC"), as the cabin's sign-in notes and the
+    uninstall sheet did. Now "computer", each language's own word (as Polish, Turkish and Latin American Spanish
+    already said), on Windows too: 59 strings, the cabin's (English) and the companion's in 20 languages. Seen:
+    "…on this computer.".
 - Bundling (`bundle.active` false, Windows' installer): the Mac's `.app` and its signing are still to do (Phase 4).

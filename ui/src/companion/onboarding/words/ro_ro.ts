@@ -20,7 +20,7 @@ export const words: Words = {
   game: {
     title: 'Jocul tău',
     titleMissing: 'Unde este jocul tău?',
-    found: 'WestPlay a găsit Euro Truck Simulator 2 pe acest PC.',
+    found: 'WestPlay a găsit Euro Truck Simulator 2 pe acest computer.',
     foundMany: 'Euro Truck Simulator 2 este instalat în mai multe locuri. Alege-l pe cel cu care joci.',
     missing:
       'WestPlay nu a găsit Euro Truck Simulator 2. Alege dosarul în care l-ai instalat, cel care conține base.scs.',

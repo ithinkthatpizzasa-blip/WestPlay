@@ -20,7 +20,7 @@ export const words: Words = {
   game: {
     title: 'Spillet ditt',
     titleMissing: 'Hvor er spillet ditt?',
-    found: 'WestPlay fant Euro Truck Simulator 2 på denne PC-en.',
+    found: 'WestPlay fant Euro Truck Simulator 2 på denne datamaskinen.',
     foundMany: 'Euro Truck Simulator 2 er installert flere steder. Velg det du spiller.',
     missing: 'WestPlay fant ikke Euro Truck Simulator 2. Velg mappen du installerte det i – den med base.scs.',
     chooseAnother: 'Bruk en annen mappe …',

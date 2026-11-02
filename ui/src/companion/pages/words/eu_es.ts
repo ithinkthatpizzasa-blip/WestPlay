@@ -205,7 +205,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Desinstalatu WestPlay…',
     title: 'WestPlay desinstalatu?',
-    text: 'WestPlay zure jokotik eta profiletatik kentzen da, eta PC honetatik ezabatzen da zure saioekin eta bere erregistroekin batera.',
+    text: 'WestPlay zure jokotik eta profiletatik kentzen da, eta ordenagailu honetatik ezabatzen da zure saioekin eta bere erregistroekin batera.',
     keep: 'Gorde ezarpenak eta mapak',
     keepDetail: 'Berriro instalatzean berriz erabiliko dira.',
     cancel: 'Utzi',
@@ -218,7 +218,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'WestPlay zure profiletatik kentzen',
       plugin: 'Plugina ezabatzen',
-      data: 'WestPlay PC honetatik ezabatzen',
+      data: 'WestPlay ordenagailu honetatik ezabatzen',
     },
     profilesFailed: 'Ezin izan dira profilak ({n}) aldatu, eta WestPlay dute oraindik. Kendu hor, Mod-kudeatzailean.',
     banners: {

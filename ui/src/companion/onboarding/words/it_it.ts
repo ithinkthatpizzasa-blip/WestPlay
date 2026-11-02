@@ -20,7 +20,7 @@ export const words: Words = {
   game: {
     title: 'Il tuo gioco',
     titleMissing: 'Dov’è il tuo gioco?',
-    found: 'WestPlay ha trovato Euro Truck Simulator 2 su questo PC.',
+    found: 'WestPlay ha trovato Euro Truck Simulator 2 su questo computer.',
     foundMany: 'Euro Truck Simulator 2 è installato in più posizioni. Scegli quello con cui giochi.',
     missing:
       'WestPlay non ha trovato Euro Truck Simulator 2. Scegli la cartella in cui l’hai installato, quella che contiene base.scs.',

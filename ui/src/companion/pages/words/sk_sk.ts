@@ -203,7 +203,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Odinštalovať WestPlay…',
     title: 'Odinštalovať WestPlay?',
-    text: 'WestPlay sa odoberie z vašej hry a profilov a vymaže sa z tohto PC aj s vašimi prihláseniami a záznamami.',
+    text: 'WestPlay sa odoberie z vašej hry a profilov a vymaže sa z tohto počítača aj s vašimi prihláseniami a záznamami.',
     keep: 'Ponechať nastavenia a mapy',
     keepDetail: 'Nová inštalácia ich znova použije.',
     cancel: 'Zrušiť',
@@ -216,7 +216,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'Odoberanie WestPlay z vašich profilov',
       plugin: 'Odstraňovanie pluginu',
-      data: 'Odstraňovanie WestPlay z tohto PC',
+      data: 'Odstraňovanie WestPlay z tohto počítača',
     },
     profilesFailed:
       'Profily ({n}) sa nepodarilo zmeniť a WestPlay v nich stále je. Odoberte ho tam v Správcovi modifikácií.',

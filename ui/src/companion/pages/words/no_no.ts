@@ -204,7 +204,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Avinstaller WestPlay …',
     title: 'Avinstallere WestPlay?',
-    text: 'WestPlay fjernes fra spillet og profilene dine og slettes fra denne PC-en sammen med påloggingene og loggene dine.',
+    text: 'WestPlay fjernes fra spillet og profilene dine og slettes fra denne datamaskinen sammen med påloggingene og loggene dine.',
     keep: 'Behold innstillinger og kart',
     keepDetail: 'En ny installasjon tar dem i bruk igjen.',
     cancel: 'Avbryt',
@@ -217,7 +217,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'Fjerner WestPlay fra profilene dine',
       plugin: 'Sletter programtillegget',
-      data: 'Sletter WestPlay fra denne PC-en',
+      data: 'Sletter WestPlay fra denne datamaskinen',
     },
     profilesFailed:
       '{n} av profilene dine kunne ikke endres og har fortsatt WestPlay. Fjern det der i Modifikasjonsoversikt.',

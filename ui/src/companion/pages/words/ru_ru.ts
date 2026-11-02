@@ -204,7 +204,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Удалить WestPlay…',
     title: 'Удалить WestPlay?',
-    text: 'WestPlay будет убран из вашей игры и профилей и удалён с этого ПК вместе с вашими входами и журналами.',
+    text: 'WestPlay будет убран из вашей игры и профилей и удалён с этого компьютера вместе с вашими входами и журналами.',
     keep: 'Сохранить настройки и карты',
     keepDetail: 'При повторной установке они пригодятся снова.',
     cancel: 'Отмена',
@@ -217,7 +217,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'Убираем WestPlay из ваших профилей',
       plugin: 'Удаляем плагин',
-      data: 'Удаляем WestPlay с этого ПК',
+      data: 'Удаляем WestPlay с этого компьютера',
     },
     profilesFailed:
       'Не удалось изменить профили ({n}), в них всё ещё есть WestPlay. Уберите его там в «Диспетчере модов».',

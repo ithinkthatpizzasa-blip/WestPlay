@@ -201,7 +201,7 @@ export const words: CompanionWords = {
   uninstall: {
     row: 'Uninstall WestPlay…',
     title: 'Uninstall WestPlay?',
-    text: 'WestPlay is taken out of your game and your profiles, and removed from this PC with your sign-ins and logs.',
+    text: 'WestPlay is taken out of your game and your profiles, and removed from this computer with your sign-ins and logs.',
     keep: 'Keep settings and maps',
     keepDetail: 'A reinstall picks them up again.',
     cancel: 'Cancel',
@@ -211,7 +211,7 @@ export const words: CompanionWords = {
     steps: {
       profiles: 'Taking WestPlay out of your profiles',
       plugin: 'Removing the plugin',
-      data: 'Removing WestPlay from this PC',
+      data: 'Removing WestPlay from this computer',
     },
     profilesFailed: '{n} of your profiles couldn’t be changed and still list WestPlay. Remove it there in Mod Manager.',
     banners: {
