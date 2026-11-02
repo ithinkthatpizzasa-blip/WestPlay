@@ -47,12 +47,31 @@ const READ_EVERY: Duration = Duration::from_millis(500);
 
 const NAVIGATOR_ROUTE_ID: usize = 0x10;
 const NAVIGATOR_HOLDER: usize = 0x28;
+/// The Mac game (1.57) keeps the next node 0x18 bytes sooner, and its route 8 sooner in its holder (read in the game,
+/// 2026-11-02).
+#[cfg(windows)]
 const NAVIGATOR_NEXT_ID: usize = 0x190;
+#[cfg(windows)]
 const NAVIGATOR_NEXT: usize = 0x198;
+#[cfg(windows)]
 const HOLDER_ROUTE: usize = 0x78;
+#[cfg(target_os = "macos")]
+const NAVIGATOR_NEXT_ID: usize = 0x178;
+#[cfg(target_os = "macos")]
+const NAVIGATOR_NEXT: usize = 0x180;
+#[cfg(target_os = "macos")]
+const HOLDER_ROUTE: usize = 0x70;
 /// The navigator's waypoints, in the order they were put in (an array: its entries at `+0x08`, their count at
 /// `+0x10`); each entry 0x18 bytes, its map node's pointer at `+0x08` (the destination isn't among them).
+#[cfg(windows)]
 const NAVIGATOR_WAYPOINTS: usize = 0x248;
+/// The Mac game (1.57) has no list in the order they were put in: its waypoints are read from the route's targets, in
+/// route order, the job's destination last while on a job (the list that grew as a stop was added, 2026-11-02).
+#[cfg(target_os = "macos")]
+const NAVIGATOR_WAYPOINTS: usize = 0x1d8;
+/// The Mac game's routing mode: a job's is 1-4, 6 or 7 (as its own code tests it).
+#[cfg(target_os = "macos")]
+const NAVIGATOR_MODE: usize = 0x1b0;
 const WAYPOINT_SIZE: usize = 0x18;
 const WAYPOINT_NODE: usize = 0x08;
 /// More waypoints than the game takes: a count past this is a layout misread.
@@ -299,13 +318,24 @@ fn read_waypoints(memory: &impl Memory, global: usize, navigator: usize) -> Opti
     if !memory.read(array, &mut raw) {
         return None;
     }
-    raw.chunks_exact(WAYPOINT_SIZE)
+    let waypoints: Option<Vec<u64>> = raw
+        .chunks_exact(WAYPOINT_SIZE)
         .map(|entry| {
             let pointer = u64::from_le_bytes(entry[WAYPOINT_NODE..WAYPOINT_NODE + 8].try_into().unwrap()) as usize;
             let mut map_node = [0u8; MAP_NODE_SIZE];
             memory.read(pointer, &mut map_node).then(|| map_node_of(&map_node).uid)
         })
-        .collect()
+        .collect();
+    // On the Mac, the route's targets: a job's destination, last, isn't a waypoint.
+    #[cfg(target_os = "macos")]
+    let waypoints = waypoints.map(|mut waypoints| {
+        let mode = memory.u64_at(owner + navigator + NAVIGATOR_MODE).map(|mode| mode as u32);
+        if mode.is_some_and(|mode| matches!(mode, 1..=4 | 6 | 7)) {
+            waypoints.pop();
+        }
+        waypoints
+    });
+    waypoints
 }
 
 /// The route's map nodes, and for each of its nodes in memory, the map node at or after it (where the truck
@@ -441,30 +471,93 @@ pub(crate) struct Process {
     pub exe: PathBuf,
 }
 
-/// The running game's process, as Windows' (read from outside). On macOS another program may read a process's
-/// memory only as a debugger may (an entitlement of Apple's granting, or root), and the Mac game's executable is
-/// another compiler's code of another version (docs/MACOS_PORT.md): what's read from the game is to be read inside
-/// it, by the plugin, and passed through the bridge. Until then there's none to open.
+/// The running game's process on macOS: read from inside it, by the plugin, through the bridge's memory block
+/// (another program may read a process's memory only as a debugger may: an entitlement of Apple's granting, or root).
 #[cfg(target_os = "macos")]
 pub(crate) struct Process {
     pub pid: u32,
     pub base: usize,
     pub exe: PathBuf,
+    bridge: westplay_shared::BridgeMapping,
 }
+
+/// One read through the bridge at a time, whichever reader (the route's, the weather's) asks.
+#[cfg(target_os = "macos")]
+static MEMORY_READS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+/// How long a read waits for the plugin's answer (it answers within milliseconds while the game runs).
+#[cfg(target_os = "macos")]
+const MEMORY_ANSWER: Duration = Duration::from_millis(500);
 
 #[cfg(target_os = "macos")]
 impl Process {
-    /// `who` names the reader in what's logged: it says why there's nothing.
+    /// `who` names the reader in what's logged.
     pub fn open(pid: u32, who: &str) -> Option<Self> {
-        log!("{who}: the game's memory isn't read from outside on macOS (game {pid}): not available yet");
-        None
+        let bridge = match westplay_shared::BridgeMapping::open() {
+            Ok(bridge) if bridge.matches() => bridge,
+            Ok(_) => {
+                log!("{who}: the plugin in the game is another version's: its memory isn't read");
+                return None;
+            }
+            Err(error) => {
+                log!("{who}: no bridge to read the game's memory through: {error}");
+                return None;
+            }
+        };
+        let block = &bridge.bridge().memory;
+        let base = block.image_base.load(Ordering::Acquire) as usize;
+        if bridge.bridge().plugin.pid.load(Ordering::Acquire) != pid || base == 0 {
+            log!("{who}: the plugin in game {pid} doesn't read its memory (an older plugin?)");
+            return None;
+        }
+        let Some(exe) = executable(pid) else {
+            log!("{who}: game {pid}'s executable isn't known");
+            return None;
+        };
+        Some(Self { pid, base, exe, bridge })
     }
+}
+
+/// A process's executable file.
+#[cfg(target_os = "macos")]
+fn executable(pid: u32) -> Option<PathBuf> {
+    unsafe extern "C" {
+        fn proc_pidpath(pid: i32, buffer: *mut u8, size: u32) -> i32;
+    }
+    let mut buffer = [0u8; 4096];
+    // SAFETY: the buffer is ours, its size given; the call writes a path of at most that.
+    let length = unsafe { proc_pidpath(pid as i32, buffer.as_mut_ptr(), buffer.len() as u32) };
+    let length = usize::try_from(length).ok().filter(|&length| length > 0)?;
+    Some(PathBuf::from(String::from_utf8_lossy(&buffer[..length]).into_owned()))
 }
 
 #[cfg(target_os = "macos")]
 impl Memory for Process {
-    fn read(&self, _address: usize, _buffer: &mut [u8]) -> bool {
-        false
+    fn read(&self, address: usize, buffer: &mut [u8]) -> bool {
+        let block = &self.bridge.bridge().memory;
+        let _one = MEMORY_READS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut at = address;
+        for piece in buffer.chunks_mut(westplay_shared::MEMORY_READ_MAX) {
+            block.address.store(at as u64, Ordering::Release);
+            block.length.store(piece.len() as u32, Ordering::Release);
+            let request = block.request.load(Ordering::Acquire).wrapping_add(1);
+            block.request.store(request, Ordering::Release);
+            let asked = Instant::now();
+            while block.answered.load(Ordering::Acquire) != request {
+                if asked.elapsed() > MEMORY_ANSWER {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_micros(200));
+            }
+            if block.ok.load(Ordering::Acquire) != 1 {
+                return false;
+            }
+            for (byte, data) in piece.iter_mut().zip(&block.data) {
+                *byte = data.load(Ordering::Relaxed);
+            }
+            at += piece.len();
+        }
+        true
     }
 }
 
@@ -534,9 +627,14 @@ impl Game {
             log!("route: the game's navigator wasn't found in {} (a new game version?)", process.exe.display());
             return None;
         };
-        // The executable is in `bin/win_x64` of the install.
-        let install =
-            process.exe.ancestors().nth(3).filter(|dir| dir.join("base.scs").is_file()).map(|dir| dir.to_owned());
+        // The executable is in `bin/win_x64` of the install (on a Mac, in the app's `Contents/MacOS`, the app in the
+        // install).
+        let install = process
+            .exe
+            .ancestors()
+            .nth(if cfg!(target_os = "macos") { 4 } else { 3 })
+            .filter(|dir| dir.join("base.scs").is_file())
+            .map(|dir| dir.to_owned());
         Some(Self { process, layout, install })
     }
 }
@@ -578,8 +676,103 @@ pub(crate) struct Section<'a> {
 }
 
 /// The navigator's layout, from the game's executable file: its code (`.text`) and constant data (`.rdata`).
+#[cfg(windows)]
 fn locate_in_image(image: &[u8]) -> Option<Layout> {
     locate(&section(image, b".text\0")?, &section(image, b".rdata\0")?)
+}
+
+/// The navigator's layout, from the Mac game's executable file (its x86_64 part): its code (`__text`) and C strings
+/// (`__cstring`).
+#[cfg(target_os = "macos")]
+fn locate_in_image(image: &[u8]) -> Option<Layout> {
+    let image = mach_o_x86_64(image)?;
+    locate_mac(&mach_o_section(image, b"__text")?, &mach_o_section(image, b"__cstring")?)
+}
+
+/// The x86_64 Mach-O in `file`: itself, or its part of a universal file.
+#[cfg(target_os = "macos")]
+pub(crate) fn mach_o_x86_64(file: &[u8]) -> Option<&[u8]> {
+    const CPU_X86_64: u32 = 0x0100_0007;
+    let be = |at: usize| file.get(at..at + 4).map(|b| u32::from_be_bytes(b.try_into().unwrap()));
+    match be(0)? {
+        0xcafe_babe => (0..be(4)? as usize).find_map(|i| {
+            let at = 8 + i * 20;
+            (be(at)? == CPU_X86_64).then(|| file.get(be(at + 8)? as usize..(be(at + 8)? + be(at + 12)?) as usize))?
+        }),
+        0xcffa_edfe => Some(file),
+        _ => None,
+    }
+}
+
+/// A section of a Mach-O's `__TEXT` segment by its name: its bytes, and where it's mapped from the executable's
+/// header (where the plugin says the game's is loaded).
+#[cfg(target_os = "macos")]
+pub(crate) fn mach_o_section<'a>(image: &'a [u8], name: &[u8]) -> Option<Section<'a>> {
+    const LC_SEGMENT_64: u32 = 0x19;
+    let u32_at = |at: usize| image.get(at..at + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize);
+    let u64_at = |at: usize| image.get(at..at + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap()) as usize);
+    let named = |at: usize, wanted: &[u8]| {
+        image.get(at..at + 16).is_some_and(|field| field.split(|&b| b == 0).next() == Some(wanted))
+    };
+    let commands = u32_at(16)?;
+    let mut at = 32;
+    for _ in 0..commands {
+        let size = u32_at(at + 4)?;
+        if u32_at(at)? == LC_SEGMENT_64 as usize && named(at + 8, b"__TEXT") {
+            let text_address = u64_at(at + 24)?;
+            for i in 0..u32_at(at + 64)? {
+                let section = at + 72 + i * 80;
+                if named(section, name) {
+                    let (address, size, offset) = (u64_at(section + 32)?, u64_at(section + 40)?, u32_at(section + 48)?);
+                    return Some(Section { rva: address - text_address, bytes: image.get(offset..offset + size)? });
+                }
+            }
+        }
+        at += size;
+    }
+    None
+}
+
+/// The navigator's layout in the Mac game (1.57, Apple's compiler): beside the name `truck.navigation.distance`
+/// (`lea rax, [name]`), its getter is registered (`lea rcx, [getter]` just after), which starts
+/// `mov rdi, [global]; test rdi, rdi` and soon `add rdi, imm32` (the navigator, an object of its own there).
+#[cfg(target_os = "macos")]
+fn locate_mac(text: &Section, cstrings: &Section) -> Option<Layout> {
+    let name = b"truck.navigation.distance\0";
+    let name_rva = cstrings.rva + cstrings.bytes.windows(name.len()).position(|w| w == name)?;
+    let code = text.bytes;
+    // A RIP-relative lea (48 or 4C, 8D, a register with [rip + disp32]) at `at`, and where it points.
+    let lea_target = |at: usize| -> Option<usize> {
+        let b = code.get(at..at + 7)?;
+        let rip_relative = (b[0] == 0x48 || b[0] == 0x4c) && b[1] == 0x8d && b[2] & 0xc7 == 0x05;
+        rip_relative
+            .then(|| (text.rva + at + 7).wrapping_add_signed(i32::from_le_bytes(b[3..7].try_into().unwrap()) as isize))
+    };
+    for site in (0..code.len().saturating_sub(7)).filter(|&at| lea_target(at) == Some(name_rva)) {
+        for ahead in 7..=48 {
+            let Some(getter) = lea_target(site + ahead) else { continue };
+            let Some(start) = getter.checked_sub(text.rva) else { continue };
+            if let Some(layout) = read_getter_mac(code, start, getter) {
+                return Some(layout);
+            }
+        }
+    }
+    None
+}
+
+/// The layout a Mac distance getter at `start` in the code (rva `rva`) reads: `48 8B 3D disp32` (mov rdi,
+/// [rip + disp32]: the global), `48 85 FF` (test rdi, rdi), then within a few instructions `48 81 C7 imm32` (add rdi,
+/// imm32: the navigator).
+#[cfg(target_os = "macos")]
+fn read_getter_mac(code: &[u8], start: usize, rva: usize) -> Option<Layout> {
+    let b = code.get(start..start + 40)?;
+    if b[..3] != [0x48, 0x8b, 0x3d] || b[7..10] != [0x48, 0x85, 0xff] {
+        return None;
+    }
+    let global_rva = (rva + 7).wrapping_add_signed(i32::from_le_bytes(b[3..7].try_into().unwrap()) as isize);
+    let at = (10..b.len() - 7).find(|&i| b[i..i + 3] == [0x48, 0x81, 0xc7])?;
+    let navigator = u32::from_le_bytes(b[at + 3..at + 7].try_into().unwrap()) as usize;
+    Some(Layout { global_rva, navigator })
 }
 
 /// A section of an executable file (`image`) by its name (NUL-terminated, eight bytes at most).
@@ -600,6 +793,7 @@ pub(crate) fn section<'a>(image: &'a [u8], name: &[u8]) -> Option<Section<'a>> {
 /// The navigator's layout, from the code: the getter registered beside the name `truck.navigation.distance`
 /// (`lea rax, [getter]` a little before `lea …, [name]`) starts `sub rsp, 28h; mov rax, [global]`, and
 /// soon `lea rcx, [rax + navigator]`.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn locate(text: &Section, rdata: &Section) -> Option<Layout> {
     let name = b"truck.navigation.distance\0";
     let name_rva = rdata.rva + rdata.bytes.windows(name.len()).position(|w| w == name)?;
@@ -626,6 +820,7 @@ fn locate(text: &Section, rdata: &Section) -> Option<Layout> {
 /// The layout a distance getter at `start` in the code (rva `rva`) reads: `48 83 EC 28` (sub rsp, 28h),
 /// `48 8B 05 disp32` (mov rax, [rip + disp32]: the global), then within a few instructions `48 8D 88 imm32`
 /// (lea rcx, [rax + imm32]: the navigator).
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn read_getter(code: &[u8], start: usize, rva: usize) -> Option<Layout> {
     let b = code.get(start..start + 48)?;
     if b[..4] != [0x48, 0x83, 0xec, 0x28] || b[4..7] != [0x48, 0x8b, 0x05] {
@@ -640,6 +835,18 @@ fn read_getter(code: &[u8], start: usize, rva: usize) -> Option<Layout> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The navigator found in the Mac game's executable named by `WESTPLAY_MAC_GAME` (1.57.2.7s: the global at
+    /// `+0x26DB3E0`, the navigator at `+0x3C38` of what it points to, read 2026-11-02).
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs the Mac game's executable: WESTPLAY_MAC_GAME"]
+    fn finds_the_navigator_in_the_mac_game() {
+        let file = std::fs::read(std::env::var("WESTPLAY_MAC_GAME").expect("WESTPLAY_MAC_GAME")).unwrap();
+        let layout = locate_in_image(&file).expect("the navigator isn't found");
+        println!("{layout:x?}");
+        assert_eq!((layout.global_rva, layout.navigator), (0x26db3e0, 0x3c38));
+    }
     use std::cell::Cell;
     use std::collections::BTreeMap;
 
