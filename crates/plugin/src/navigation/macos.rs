@@ -8,11 +8,11 @@
 //! a list in unless it's the navigator's own, so the first and the last are given back as they are, and only the route
 //! is new.
 //!
-//! A map node from the node table (the `goto` console command's lookup, by uid) is its whole item: the map node the
-//! route's targets point to (where its position is, as route.rs reads it) is [`NODE_IN_ITEM`] into it, its uid then at
-//! `+0x30` (the item's `+0x40`, which the lookup compares).
+//! A map node comes from the node table (the `goto` console command's second lookup, by uid: its first is the map's
+//! items'): the table's entries are the map nodes themselves, as the route's targets point to them (their position
+//! first, as route.rs reads it, their uid at `+0x30`).
 
-use std::ffi::{CStr, c_void};
+use std::ffi::c_void;
 
 use super::{List, Planned, Target};
 use crate::log;
@@ -23,9 +23,7 @@ const FIRST: usize = 0x1b8;
 pub const ROUTE: usize = 0x1d8;
 const AVOID: usize = 0x1f8;
 
-/// Where a map node lies in the node table's item.
-const NODE_IN_ITEM: usize = 0x10;
-/// A map node's uid, from where a target points.
+/// A map node's uid.
 const NODE_UID: usize = 0x30;
 
 type SetTargets = unsafe extern "C" fn(*mut u8, u32, *const List, *const List, *const List);
@@ -46,22 +44,21 @@ unsafe impl Send for Game {}
 unsafe impl Sync for Game {}
 
 impl Game {
-    /// The map node with this uid, from the game's node table: where a target points to it.
+    /// The map node with this uid, from the game's node table.
     ///
     /// # Safety
     /// On the game's main thread, `core` the game's core object.
     pub unsafe fn find_node(&self, core: *mut u8, uid: u64) -> Option<usize> {
-        // SAFETY: the game's own lookup, found by its shape (`locate`), with its core object; the uid read back from
-        // where the node is expected, a check that it's the node (nothing is done with one that isn't).
+        // SAFETY: the game's own lookup, found by its shape (`locate`), with its core object; the uid read back from the
+        // node, a check that it's one (nothing is done with one that isn't).
         unsafe {
-            let item = (self.find_node)(core, uid);
-            if item.is_null() {
+            let node = (self.find_node)(core, uid);
+            if node.is_null() {
                 return None;
             }
-            let node = item.add(NODE_IN_ITEM);
             let found = (node.add(NODE_UID) as *const u64).read_unaligned();
             if found != uid {
-                log!("route: node {uid:#x}: the table's item at {item:p} has {found:#x} where its uid should be");
+                log!("route: node {uid:#x}: the table's entry at {node:p} has {found:#x} where its uid should be");
                 return None;
             }
             Some(node as usize)
@@ -107,8 +104,8 @@ const SET_TARGETS: &[u8] = &[
     0x00, 0x00, 0x48, 0x39, 0xd7,
 ];
 
-/// The node table's lookup by uid: a binary search of the items at `+0x18` of its object (their count at `+0x20`), by
-/// the uid at `+0x40` of each (`None`: any byte, a jump's length).
+/// The node table's lookup by uid: a binary search of the map nodes at `+0x38` of its object (their count at
+/// `+0x40`), by the uid at `+0x30` of each (`None`: any byte, a jump's length).
 const FIND_NODE: &[Option<u8>] = &[
     Some(0x55),
     Some(0x48),
@@ -121,7 +118,7 @@ const FIND_NODE: &[Option<u8>] = &[
     Some(0x48),
     Some(0x8b),
     Some(0x4f),
-    Some(0x20),
+    Some(0x40),
     Some(0x31),
     Some(0xd2),
     Some(0x49),
@@ -162,7 +159,7 @@ const FIND_NODE: &[Option<u8>] = &[
     Some(0x48),
     Some(0x8b),
     Some(0x47),
-    Some(0x18),
+    Some(0x38),
     Some(0x4a),
     Some(0x8b),
     Some(0x04),
@@ -177,7 +174,7 @@ const FIND_NODE: &[Option<u8>] = &[
     Some(0x48),
     Some(0x39),
     Some(0x70),
-    Some(0x40),
+    Some(0x30),
 ];
 
 unsafe extern "C" {
@@ -233,22 +230,26 @@ impl Image {
         let u32_at = |at: usize| unsafe { ((base + at) as *const u32).read_unaligned() } as usize;
         // SAFETY: as above.
         let u64_at = |at: usize| unsafe { ((base + at) as *const u64).read_unaligned() } as usize;
-        // SAFETY: as above: a 16-byte name field.
-        let name =
-            |at: usize| unsafe { CStr::from_bytes_until_nul(std::slice::from_raw_parts((base + at) as *const u8, 17)) };
+        // A segment's or section's name: its 16-byte field, up to a nul if there's one (a name of 16 has none: 1.57's
+        // `__TEXT` has `__objc_classname`).
+        let name = |at: usize| {
+            // SAFETY: as above: a 16-byte name field.
+            let field = unsafe { std::slice::from_raw_parts((base + at) as *const u8, 16) };
+            field.split(|&byte| byte == 0).next().unwrap_or(field)
+        };
         if u32_at(0) != 0xfeed_facf {
             return None;
         }
         let (mut text, mut cstrings) = (None, None);
         let mut at = 32;
         for _ in 0..u32_at(16) {
-            if u32_at(at) == LC_SEGMENT_64 as usize && name(at + 8).ok()?.to_bytes() == b"__TEXT" {
+            if u32_at(at) == LC_SEGMENT_64 as usize && name(at + 8) == b"__TEXT" {
                 // How far it's loaded from where its segment says: each section's address moved as far.
                 let slide = base.wrapping_sub(u64_at(at + 24));
                 for i in 0..u32_at(at + 64) {
                     let section = at + 72 + i * 80;
                     let place = (u64_at(section + 32).wrapping_add(slide), u64_at(section + 40));
-                    match name(section).ok()?.to_bytes() {
+                    match name(section) {
                         b"__text" => text = Some(place),
                         b"__cstring" => cstrings = Some(place),
                         _ => {}
@@ -305,5 +306,48 @@ impl Image {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A string of this test's own, to be found among its executable's C strings.
+    const MARKER: &str = "westplay: a C string the image search finds\0";
+
+    #[test]
+    fn finds_the_code_and_strings_of_an_executable_as_loaded() {
+        // SAFETY: image 0 is this test's executable, loaded for its life.
+        let image = unsafe { Image::of(_dyld_get_image_header(0) as usize) }.expect("the image isn't read");
+        assert!(image.text.1 > 0 && image.code().len() == image.text.1);
+        // SAFETY: the C strings section as `Image::of` found it, loaded for the test's life.
+        let strings = unsafe { std::slice::from_raw_parts(image.cstrings.0 as *const u8, image.cstrings.1) };
+        assert!(strings.windows(MARKER.len()).any(|w| w == MARKER.as_bytes()), "{:?}", std::hint::black_box(MARKER));
+    }
+
+    /// The Mac game's pieces found in its executable named by `WESTPLAY_MAC_GAME` (1.57.2.7s: the core's global at
+    /// `+0x26DB3E0`, the navigator at `+0x3C38`, "set targets" at `+0x7146A0`, the node lookup at `+0x69EE30`, read
+    /// 2026-11-02). Its `__TEXT` starts its file, so its bytes there lie as loaded.
+    #[test]
+    #[ignore = "needs the Mac game's executable: WESTPLAY_MAC_GAME"]
+    fn finds_the_pieces_in_the_mac_game() {
+        let file = std::fs::read(std::env::var("WESTPLAY_MAC_GAME").expect("WESTPLAY_MAC_GAME")).unwrap();
+        let be = |at: usize| u32::from_be_bytes(file[at..at + 4].try_into().unwrap()) as usize;
+        // Its x86_64 part, of a universal file.
+        let image = if be(0) == 0xcafe_babe {
+            let arch = (0..be(4)).map(|i| 8 + i * 20).find(|&at| be(at) == 0x0100_0007).unwrap();
+            file[be(arch + 8)..be(arch + 8) + be(arch + 12)].to_vec()
+        } else {
+            file
+        };
+        // SAFETY: the executable's bytes, laid out as loaded for its `__TEXT`, alive through the test.
+        let image = unsafe { Image::of(image.as_ptr() as usize) }.expect("the image isn't read");
+        let (core, navigator) = image.navigator().expect("no navigator");
+        let set_targets =
+            image.unique(&SET_TARGETS.iter().map(|&b| Some(b)).collect::<Vec<_>>()).expect("no set targets");
+        let find_node = image.unique(FIND_NODE).expect("no node lookup");
+        let found = (core - image.base, navigator, set_targets - image.base, find_node - image.base);
+        assert_eq!(found, (0x26db3e0, 0x3c38, 0x7146a0, 0x69ee30));
     }
 }
