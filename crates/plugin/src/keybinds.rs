@@ -4,18 +4,35 @@
 //! it. A binding with the interaction key counts only while the player uses the screen (the key held, or
 //! toggled on); one without it counts whenever, but not while the player types into WestPlay. While its
 //! binding counts, a bound key is kept from the game (the `keyboard` module asks [`taken`]), so the game
-//! never acts on it too. A mouse button bound is left to the game: it reads the mouse through DirectInput,
-//! and leaves its side buttons unbound.
+//! never acts on it too. A mouse button bound is left to the game: it leaves its side buttons unbound.
+//!
+//! Keys are Windows' virtual-key codes on every OS (the app's settings hold them): on macOS the `keyboard` module
+//! names the Mac's keys so.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use westplay_shared::{KEYBIND_COUNT, Keybind, keybind_of};
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VIRTUAL_KEY, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_MENU, VK_RCONTROL, VK_RMENU,
-    VK_RSHIFT, VK_SHIFT, VK_XBUTTON2,
-};
 
 use crate::{bridge, input, log, typing};
+
+#[cfg(windows)]
+mod windows;
+
+#[cfg(windows)]
+pub use windows::*;
+
+/// Virtual-key codes: the generic Shift, Ctrl and Alt, and each one's sides.
+pub const VK_SHIFT: u32 = 0x10;
+pub const VK_CONTROL: u32 = 0x11;
+pub const VK_MENU: u32 = 0x12;
+pub const VK_LSHIFT: u32 = 0xa0;
+pub const VK_RSHIFT: u32 = 0xa1;
+pub const VK_LCONTROL: u32 = 0xa2;
+pub const VK_RCONTROL: u32 = 0xa3;
+pub const VK_LMENU: u32 = 0xa4;
+pub const VK_RMENU: u32 = 0xa5;
+/// The mouse's forward button: the last of the mouse buttons' codes.
+const VK_XBUTTON2: u32 = 0x06;
 
 /// Whether each binding's key was down at the last frame.
 static WAS_DOWN: [AtomicBool; KEYBIND_COUNT] = [const { AtomicBool::new(false) }; KEYBIND_COUNT];
@@ -23,15 +40,14 @@ static WAS_DOWN: [AtomicBool; KEYBIND_COUNT] = [const { AtomicBool::new(false) }
 /// Once a frame: counts each new press of a bound key whose binding counts, for the app.
 pub fn on_frame() {
     let Some(bridge) = bridge::get() else { return };
-    let in_game = crate::d3d::game_shown();
+    let in_game = input::game_shown();
     for keybind in Keybind::ALL {
         let i = keybind as usize;
         let Some((key, with_interaction_key)) = keybind_of(bridge.host.keybinds[i].load(Ordering::Acquire)) else {
             WAS_DOWN[i].store(false, Ordering::Release);
             continue;
         };
-        // SAFETY: a plain query, no pointers.
-        let down = unsafe { GetAsyncKeyState(key as i32) } as u16 & 0x8000 != 0;
+        let down = input::key_down(key);
         // First: every frame's key state is kept, whether the press counts or not.
         if input::newly_down(&WAS_DOWN[i], down) && in_game && counts(with_interaction_key) {
             bridge.plugin.keybind_presses[i].fetch_add(1, Ordering::AcqRel);
@@ -61,50 +77,21 @@ pub fn taken(key: u32) -> bool {
 /// The keys `key` stands for: both sides for the generic Shift, Ctrl and Alt, else itself.
 fn sides(key: u32) -> [u32; 2] {
     match key {
-        k if k == vk(VK_SHIFT) => [vk(VK_LSHIFT), vk(VK_RSHIFT)],
-        k if k == vk(VK_CONTROL) => [vk(VK_LCONTROL), vk(VK_RCONTROL)],
-        k if k == vk(VK_MENU) => [vk(VK_LMENU), vk(VK_RMENU)],
+        VK_SHIFT => [VK_LSHIFT, VK_RSHIFT],
+        VK_CONTROL => [VK_LCONTROL, VK_RCONTROL],
+        VK_MENU => [VK_LMENU, VK_RMENU],
         k => [k, k],
     }
 }
 
-/// The side of a key message's Shift, Ctrl or Alt (its `wParam` is the generic one), from its `lParam`:
-/// right Ctrl and Alt are extended keys, right Shift has its own scan code. Any other key as it is.
-pub fn sided(key: u32, lparam: isize) -> u32 {
-    let extended = (lparam >> 24) & 1 != 0;
-    let scancode = (lparam >> 16) & 0xff;
-    match key {
-        k if k == vk(VK_SHIFT) => vk(if scancode == 0x36 { VK_RSHIFT } else { VK_LSHIFT }),
-        k if k == vk(VK_CONTROL) => vk(if extended { VK_RCONTROL } else { VK_LCONTROL }),
-        k if k == vk(VK_MENU) => vk(if extended { VK_RMENU } else { VK_LMENU }),
-        k => k,
-    }
-}
-
-fn vk(key: VIRTUAL_KEY) -> u32 {
-    u32::from(key.0)
-}
-
 /// Mouse buttons' virtual-key codes: left, right, (cancel,) middle, back, forward.
 fn is_mouse_button(key: u32) -> bool {
-    (1..=vk(VK_XBUTTON2)).contains(&key) && key != 3
+    (1..=VK_XBUTTON2).contains(&key) && key != 3
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_messages_shift_ctrl_and_alt_get_their_side() {
-        // Right Alt (AltGr) and right Ctrl are extended keys.
-        assert_eq!(sided(0x12, 1 << 24 | 0x38 << 16), 0xa5);
-        assert_eq!(sided(0x12, 0x38 << 16), 0xa4);
-        assert_eq!(sided(0x11, 1 << 24 | 0x1d << 16), 0xa3);
-        assert_eq!(sided(0x10, 0x36 << 16), 0xa1);
-        assert_eq!(sided(0x10, 0x2a << 16), 0xa0);
-        // Any other key as it is.
-        assert_eq!(sided(0x31, 0x02 << 16), 0x31);
-    }
 
     #[test]
     fn the_generic_modifiers_stand_for_both_sides() {

@@ -2,25 +2,44 @@
 //! [`westplay_shared::TypingBlock`]).
 //!
 //! While the truck stands still, a field selected then takes the keyboard: every key press becomes what
-//! the player's Windows keyboard layout types (Turkish Q types ı ğ ü, AltGr and accent keys work), queued for
+//! the player's keyboard layout types (Turkish Q types ı ğ ü, AltGr, Option and accent keys work), queued for
 //! the app, and the game gets none of them but the few that stay its own ([`stays_the_games`]). The keys are
 //! the game's again when the field is no longer selected (submitted, a result chosen, the keyboard put away,
 //! Esc) or the truck moves; after moving, only a new selection takes them again, so the throttle never types
 //! a "w" at a red light ([`Gate`]).
+//!
+//! What a key types is each OS's: Windows' keyboard layout (`typing/windows.rs`), the Mac's (`typing/macos.rs`).
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use westplay_shared::{TypedKey, TypingState};
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_APPS, VK_BACK, VK_CONTROL, VK_ESCAPE, VK_F1, VK_F24, VK_LWIN,
-    VK_MENU, VK_RETURN, VK_RWIN, VK_SNAPSHOT,
-};
 
 use crate::{bridge, log};
 
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(windows)]
+mod windows;
+
+#[cfg(target_os = "macos")]
+pub use macos::*;
+#[cfg(windows)]
+pub use windows::*;
+
 /// Faster than this, the truck is moving, km/h.
 const MOVING_KMH: f32 = 1.0;
+
+/// Virtual-key codes of the keys with a meaning of their own, and of those that stay the game's.
+const VK_BACK: u32 = 0x08;
+const VK_RETURN: u32 = 0x0d;
+const VK_ESCAPE: u32 = 0x1b;
+const VK_SNAPSHOT: u32 = 0x2c;
+const VK_LWIN: u32 = 0x5b;
+const VK_RWIN: u32 = 0x5c;
+const VK_APPS: u32 = 0x5d;
+const VK_F1: u32 = 0x70;
+const VK_F24: u32 = 0x87;
 
 /// Whether the keys type into the field right now (read by the keyboard hooks, on any thread).
 static TYPING: AtomicBool = AtomicBool::new(false);
@@ -73,73 +92,32 @@ impl Gate {
     }
 }
 
-/// Keys that stay the game's while typing: the F-keys, Print Screen, the Windows keys and the menu key
-/// (screenshots, the game's own F-key functions, switching windows).
+/// Keys that stay the game's while typing (virtual-key codes): the F-keys, Print Screen, the Windows keys and
+/// the menu key (screenshots, the game's own F-key functions, switching windows).
 pub fn stays_the_games(key: u32) -> bool {
-    (VK_F1.0 as u32..=VK_F24.0 as u32).contains(&key)
-        || [VK_SNAPSHOT, VK_LWIN, VK_RWIN, VK_APPS].iter().any(|vk| vk.0 as u32 == key)
+    (VK_F1..=VK_F24).contains(&key) || [VK_SNAPSHOT, VK_LWIN, VK_RWIN, VK_APPS].contains(&key)
 }
 
-/// The same keys as DirectInput names them (scan codes, extended ones with 0x80): F1-F15, Print Screen
-/// (SysRq), the Windows and menu keys.
-pub fn stays_the_games_scancode(scancode: u32) -> bool {
-    matches!(scancode, 0x3b..=0x44 | 0x57 | 0x58 | 0x64..=0x66 | 0xb7 | 0xdb..=0xdd)
-}
-
-/// A key pressed while typing (`key`, its scan code): queued for the app as what it types.
-///
-/// # Safety
-/// On the game's window thread (the keyboard state read is that thread's).
-pub unsafe fn press(key: u32, scancode: u32) {
-    // SAFETY: on the thread whose keyboard state is asked (the caller's contract).
-    unsafe {
-        let typed = typed(key, scancode);
-        let Some(bridge) = bridge::get() else { return };
-        for code in typed {
-            if !bridge.typing.keys.push(code) {
-                log!("typing queue full, a key dropped");
-            }
+/// Queues what a key press typed for the app.
+fn queue(typed: impl IntoIterator<Item = u32>) {
+    let Some(bridge) = bridge::get() else { return };
+    for code in typed {
+        if !bridge.typing.keys.push(code) {
+            log!("typing queue full, a key dropped");
         }
     }
 }
 
-/// What a key press types: a key with its own meaning ([`key_meaning`]), or the characters the player's
-/// keyboard layout gives (none for an accent key, whose accent waits for the next letter).
-///
-/// # Safety
-/// As [`press`].
-unsafe fn typed(key: u32, scancode: u32) -> Vec<u32> {
-    // SAFETY: plain Windows calls with locals; the keyboard state is this thread's (the caller's contract).
-    unsafe {
-        let mut state = [0u8; 256];
-        if GetKeyboardState(&mut state).is_err() {
-            return Vec::new();
-        }
-        let down = |vk: u16| state[vk as usize] & 0x80 != 0;
-        // Ctrl alone (Ctrl with Alt is AltGr, which types characters).
-        let ctrl = down(VK_CONTROL.0) && !down(VK_MENU.0);
-        if let Some(meaning) = key_meaning(key, ctrl) {
-            return meaning.map(|key| key as u32).into_iter().collect();
-        }
-        let mut buffer = [0u16; 8];
-        let layout = GetKeyboardLayout(0);
-        let count = ToUnicodeEx(key, scancode, &state, &mut buffer, 0, Some(layout));
-        if count <= 0 {
-            return Vec::new();
-        }
-        String::from_utf16_lossy(&buffer[..count as usize]).chars().filter(|c| !c.is_control()).map(u32::from).collect()
-    }
-}
-
-/// A key with a meaning of its own while typing: `Some(Some(key))`; `Some(None)` for one that types nothing
-/// (other Ctrl shortcuts); `None` for one the layout turns into characters.
-fn key_meaning(key: u32, ctrl: bool) -> Option<Option<TypedKey>> {
+/// A key with a meaning of its own while typing (`shortcut`: Ctrl on Windows, Command on a Mac; `word`: what
+/// takes a whole word back, Ctrl on Windows, Option on a Mac): `Some(Some(key))`; `Some(None)` for a shortcut
+/// that types nothing; `None` for one the layout turns into characters.
+fn key_meaning(key: u32, shortcut: bool, word: bool) -> Option<Option<TypedKey>> {
     match key {
-        k if k == VK_BACK.0 as u32 => Some(Some(if ctrl { TypedKey::WordBackspace } else { TypedKey::Backspace })),
-        k if k == VK_RETURN.0 as u32 => Some(Some(TypedKey::Enter)),
-        k if k == VK_ESCAPE.0 as u32 => Some(Some(TypedKey::Escape)),
-        k if k == u32::from(b'V') && ctrl => Some(Some(TypedKey::Paste)),
-        _ if ctrl => Some(None),
+        VK_BACK => Some(Some(if word { TypedKey::WordBackspace } else { TypedKey::Backspace })),
+        VK_RETURN => Some(Some(TypedKey::Enter)),
+        VK_ESCAPE => Some(Some(TypedKey::Escape)),
+        k if k == u32::from(b'V') && shortcut => Some(Some(TypedKey::Paste)),
+        _ if shortcut => Some(None),
         _ => None,
     }
 }
@@ -174,22 +152,22 @@ mod tests {
 
     #[test]
     fn keys_with_meanings_of_their_own() {
-        assert_eq!(key_meaning(VK_BACK.0 as u32, false), Some(Some(TypedKey::Backspace)));
-        assert_eq!(key_meaning(VK_BACK.0 as u32, true), Some(Some(TypedKey::WordBackspace)));
-        assert_eq!(key_meaning(VK_RETURN.0 as u32, false), Some(Some(TypedKey::Enter)));
-        assert_eq!(key_meaning(VK_ESCAPE.0 as u32, false), Some(Some(TypedKey::Escape)));
-        assert_eq!(key_meaning(u32::from(b'V'), true), Some(Some(TypedKey::Paste)));
-        // A letter is the layout's; with Ctrl, nothing.
-        assert_eq!(key_meaning(u32::from(b'V'), false), None);
-        assert_eq!(key_meaning(u32::from(b'C'), true), Some(None));
+        assert_eq!(key_meaning(VK_BACK, false, false), Some(Some(TypedKey::Backspace)));
+        assert_eq!(key_meaning(VK_BACK, true, true), Some(Some(TypedKey::WordBackspace)));
+        assert_eq!(key_meaning(VK_RETURN, false, false), Some(Some(TypedKey::Enter)));
+        assert_eq!(key_meaning(VK_ESCAPE, false, false), Some(Some(TypedKey::Escape)));
+        assert_eq!(key_meaning(u32::from(b'V'), true, true), Some(Some(TypedKey::Paste)));
+        // A letter is the layout's; with the shortcut key, nothing.
+        assert_eq!(key_meaning(u32::from(b'V'), false, false), None);
+        assert_eq!(key_meaning(u32::from(b'C'), true, true), Some(None));
+        // On a Mac, Option takes a word back but types characters otherwise.
+        assert_eq!(key_meaning(VK_BACK, false, true), Some(Some(TypedKey::WordBackspace)));
+        assert_eq!(key_meaning(u32::from(b'E'), false, true), None);
     }
 
     #[test]
     fn some_keys_stay_the_games() {
-        assert!(stays_the_games(VK_F1.0 as u32) && stays_the_games(VK_SNAPSHOT.0 as u32));
-        assert!(!stays_the_games(u32::from(b'W')) && !stays_the_games(VK_RETURN.0 as u32));
-        // F5 and the left Windows key as DirectInput names them; W (0x11) not.
-        assert!(stays_the_games_scancode(0x3f) && stays_the_games_scancode(0xdb));
-        assert!(!stays_the_games_scancode(0x11));
+        assert!(stays_the_games(VK_F1) && stays_the_games(VK_SNAPSHOT));
+        assert!(!stays_the_games(u32::from(b'W')) && !stays_the_games(VK_RETURN));
     }
 }
