@@ -43,6 +43,13 @@ describe('destinationView', () => {
     })
   })
 
+  it('shows the distance in miles with the game’s units imperial, the job’s planned one without a route', () => {
+    expect(destinationView(job, null, telemetry, [], text, 0, true)?.detail).toBe('Arrive by 18:40 · 133 mi')
+    const noRoute = { ...telemetry, navigationDistance: 0 }
+    expect(destinationView(job, null, noRoute, [], text, 0, true)?.detail).toBe('Arrive by 18:40 · 920 mi')
+    expect(destinationView(job, null, noRoute, [], text, 0)?.detail).toBe('Arrive by 18:40 · 1480 km')
+  })
+
   it('shows times by the cab clock in a Convoy session, and is late by the player’s own time', () => {
     // The player's own 14:00 is the session's 01:11 the next day (11 h 11 min on).
     const convoy = { ...telemetry, multiplayerTimeOffset: 11 * 60 + 11 }

@@ -1,6 +1,6 @@
 //! What WestPlay takes from the player's game files, watched while it runs: from the newest save of the
 //! profile the game has selected (or the save it last wrote: `westplay_mapdata::save`), the garages they own; from that save's profile, the mods they play
-//! with (a map WestPlay doesn't allow) and its time zones option (the profile's `config.cfg`); from the
+//! with (a map WestPlay doesn't allow) and its time zones and units options (the profile's `config.cfg`); from the
 //! game's config, its language. The game saves often (autosaves as the player drives), so a garage bought
 //! shows as theirs on the map soon after. Read off the host's own thread (decrypting and reading a save
 //! takes a moment), and only when a newer save appears or the profile's options are saved. For a truck whose
@@ -34,6 +34,9 @@ pub struct Player {
     /// The profile has the game's time zones on (Options › Gameplay › Time zones: "Only time" or "Full
     /// info"): the game's clock shows the time of the country the truck is in.
     pub time_zones: bool,
+    /// The profile has the game's units imperial (Options › Gameplay › Units, its `g_mph`): distances in
+    /// miles and yards, speeds in mph.
+    pub miles: bool,
 }
 
 /// The speakers of the parts of the truck the SDK names (`None`: not found in the save, or no part with any).
@@ -84,7 +87,7 @@ impl PlayerWatch {
                     of_selected.or_else(|| save::latest(dir, userdata.as_deref()))
                 });
                 let stamped = latest.and_then(|path| Some((std::fs::metadata(&path).ok()?.modified().ok()?, path)));
-                // The profile's options (its time zones) are saved apart from its saves.
+                // The profile's options (its time zones, its units) are saved apart from its saves.
                 let options = stamped.as_ref().and_then(|(_, path)| profile_config(path));
                 let options_written = options.as_deref().and_then(|file| std::fs::metadata(file).ok()?.modified().ok());
                 if let Some((modified, path)) = stamped
@@ -104,14 +107,13 @@ impl PlayerWatch {
                                 mods.iter().zip(&found).any(|(listed, m)| is_hvt_map(listed) || m.is_hvt_map());
                             saved = fitted::saved_trucks(&units);
                             mod_files = found.into_iter().filter_map(|m| m.files).collect();
+                            let config = options.as_deref().and_then(|file| std::fs::read_to_string(file).ok());
                             let player = Player {
                                 garages: save::garages(&units),
                                 hvt_map,
                                 language: documents.as_deref().and_then(game_language),
-                                time_zones: options
-                                    .as_deref()
-                                    .and_then(|file| std::fs::read_to_string(file).ok())
-                                    .is_some_and(|config| time_zones(&config)),
+                                time_zones: config.as_deref().is_some_and(time_zones),
+                                miles: config.as_deref().is_some_and(miles),
                             };
                             if sender.send(player).is_err() {
                                 return;
@@ -202,10 +204,21 @@ fn profile_config(save: &Path) -> Option<PathBuf> {
 /// Whether a profile's options (its `config.cfg`) have the game's time zones on: `uset g_time_zones "1"`
 /// ("Only time") or `"2"` ("Full info"); `"0"`, or none written, is off.
 fn time_zones(config: &str) -> bool {
+    option_on(config, "g_time_zones")
+}
+
+/// Whether a profile's options have the game's units imperial: `uset g_mph "1"`; `"0"`, or none written, is
+/// metric.
+fn miles(config: &str) -> bool {
+    option_on(config, "g_mph")
+}
+
+/// Whether a profile's option `name` is set, and not to `"0"`.
+fn option_on(config: &str, name: &str) -> bool {
     config.lines().any(|line| {
         let mut words = line.split_whitespace();
         words.next() == Some("uset")
-            && words.next() == Some("g_time_zones")
+            && words.next() == Some(name)
             && words.next().is_some_and(|value| !matches!(value.trim_matches('"'), "" | "0"))
     })
 }
@@ -220,6 +233,13 @@ mod tests {
         assert!(super::time_zones("uset g_time_zones \"1\"\r\n"));
         assert!(super::time_zones("uset g_heavy_cargo_popup \"1\"\nuset g_time_zones \"2\"\n"));
         assert!(!super::time_zones("uset g_lang_init \"tr_tr\"\n"));
+    }
+
+    #[test]
+    fn reads_whether_the_profiles_units_are_imperial() {
+        assert!(super::miles("uset g_pounds \"kg\"\nuset g_mph \"1\"\n"));
+        assert!(!super::miles("uset g_mph \"0\"\r\n"));
+        assert!(!super::miles("uset g_mpg \"2\"\n"));
     }
 
     #[test]

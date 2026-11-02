@@ -1925,8 +1925,9 @@ fn parse_page_message(message: &str) -> Option<PageMessage> {
 /// What the player's latest save says, for the page: `{"type":"garages","owned":["calais",...],
 /// "headquarters":"calais"}` (the cities whose garages they own, and their headquarters', `null` if none),
 /// `{"type":"mapBlock","hvt":true,"language":"tr_tr"}` (they play on a map by HVT, which WestPlay
-/// doesn't allow, and the game's language to say so in), and `{"type":"timeZones","on":true}` (their
-/// profile has the game's time zones on: the clock is the time where the truck is).
+/// doesn't allow, and the game's language to say so in), `{"type":"timeZones","on":true}` (their
+/// profile has the game's time zones on: the clock is the time where the truck is) and
+/// `{"type":"units","miles":true}` (their profile's units are imperial: miles and mph).
 fn player_messages_for(player: &Player) -> Vec<String> {
     let garages = &player.garages;
     vec![
@@ -1934,6 +1935,7 @@ fn player_messages_for(player: &Player) -> Vec<String> {
             .to_string(),
         serde_json::json!({ "type": "mapBlock", "hvt": player.hvt_map, "language": player.language }).to_string(),
         serde_json::json!({ "type": "timeZones", "on": player.time_zones }).to_string(),
+        serde_json::json!({ "type": "units", "miles": player.miles }).to_string(),
     ]
 }
 
@@ -2333,13 +2335,15 @@ mod tests {
             hvt_map: true,
             language: Some("tr_tr".into()),
             time_zones: true,
+            miles: true,
         };
         assert_eq!(
             super::player_messages_for(&player),
             [
                 r#"{"headquarters":"calais","owned":["calais","dover"],"type":"garages"}"#,
                 r#"{"hvt":true,"language":"tr_tr","type":"mapBlock"}"#,
-                r#"{"on":true,"type":"timeZones"}"#
+                r#"{"on":true,"type":"timeZones"}"#,
+                r#"{"miles":true,"type":"units"}"#
             ]
         );
     }

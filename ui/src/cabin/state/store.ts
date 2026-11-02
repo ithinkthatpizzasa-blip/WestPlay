@@ -248,6 +248,9 @@ export interface LiveState {
   /** The player's profile has the game's time zones on (its `g_time_zones`): the clock is the time where
    * the truck is (state/timeZone.ts). */
   timeZones: boolean
+  /** The player's profile has the game's units imperial (its `g_mph`): distances in miles and yards, speeds
+   * in mph (shared/format.ts). */
+  miles: boolean
   /** How far the clock where the truck is runs from the game's time, minutes: its country's time zone with
    * the profile's time zones on, else 0 (state/timeZone.ts). Every clock shown adds it (`cabClock`). */
   clockShift: number
@@ -303,6 +306,7 @@ export const useLive = create<LiveState>()(() => ({
   hvtMap: null,
   gameLanguage: null,
   timeZones: false,
+  miles: false,
   clockShift: 0,
   route: null,
   routeNext: 0,
@@ -408,6 +412,9 @@ function receiveHostMessage(now: () => number): (message: HostMessage) => void {
         break
       case 'timeZones':
         useLive.setState({ timeZones: message.on })
+        break
+      case 'units':
+        useLive.setState({ miles: message.miles })
         break
       case 'route':
         useLive.setState({
