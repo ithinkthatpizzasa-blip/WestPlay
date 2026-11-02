@@ -124,7 +124,9 @@ impl<'a> FrameReader<'a> {
         Self { block, front }
     }
 
-    /// The newest frame, if one came since the last; it stays the reader's until the next call.
+    /// The newest frame, if one came since the last; it stays the reader's until the next call. Once one has come,
+    /// the frame taken before is the app's again, so `Some` always (a frame of no size, or of more than a frame
+    /// holds: its pixels empty).
     pub fn take(&mut self) -> Option<Frame<'_>> {
         if self.block.latest.load(Ordering::Acquire) & NEW == 0 {
             return None;
@@ -136,9 +138,7 @@ impl<'a> FrameReader<'a> {
         let width = slot.width.load(Ordering::Relaxed);
         let height = slot.height.load(Ordering::Relaxed);
         let len = width as usize * height as usize * 4;
-        if len == 0 || len > FRAME_BYTES {
-            return None;
-        }
+        let len = if len > FRAME_BYTES { 0 } else { len };
         // SAFETY: the front slot is the reader's (the protocol above) until the next `take`, which the borrow
         // of `self` keeps from happening while the frame is used.
         let pixels = unsafe { &(&*slot.pixels.get())[..len] };
@@ -193,6 +193,10 @@ mod tests {
         assert!(reader.take().is_none(), "taken already");
         assert!(writer.write(3, 1, 1, |pixels| pixels.fill(3)));
         assert_eq!(reader.take().unwrap().pixels, [3; 4]);
+        // A frame of no size still comes: the one taken before is the app's again.
+        assert!(writer.write(4, 0, 0, |_| {}));
+        let frame = reader.take().unwrap();
+        assert_eq!((frame.seq, frame.pixels.len()), (4, 0));
     }
 
     #[test]
