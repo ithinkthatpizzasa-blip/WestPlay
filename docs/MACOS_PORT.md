@@ -675,10 +675,19 @@ owner's (ProMods' seven packs) in 470 s, 149 MB. The standalone host builds one 
 game's folder (the app's setup chooses it otherwise, not run on this Mac yet).
 
 **Not done in 3d yet:**
-- `mod_mount`: 1.57 mounts differently from the 1.6x builds Windows knows. A device is made from the file first
-  (`0x1019ccbe0`), then added to a pool (`0x1019c3090`: device, pool, path, priority; the mod pool is 2). Meanwhile the
-  screen mod stays switched on in the Mod Manager.
+- `mod_mount`: 1.57 has the same mount as 1.6x, taking the same request (0x28 bytes: kind, pool, path, name, flag, priority,
+  flag, extra) at `+0x1AACC70`: it joins the path to a prefix when the game has one set, makes the device
+  (`+0x1AB0A70`) and adds it to the pool (`+0x1AB0B50` → `+0x19C3040`: device, pool, mount point, priority). The game's
+  own archives' requests (a table at `+0x254B638`…): kind 4 (Windows' 1.6x: 3), flags 1 and 1, `extra` 3 or 4 (1.6x
+  wants it under 3), pools 0 and 3; the mod pool is 2 (the Mod Manager opens a mod's icons there), as 1.61. No pool
+  index to rebuild (its log says `[fs] device … mounted.`, like 1.58). Not tried: the right `extra` and flags for a
+  mod's archive are a guess until seen, a wrong one at the game's start may stop it, and trying it means taking
+  `westplay.scs` out of the game's `mod` folder (two copies stop the game). Meanwhile the screen mod stays switched on
+  in the Mod Manager.
 - `camera`: no `subss` triple like Windows'; Apple's compiler writes and reads it otherwise. To be found by probing
   the running game's memory (now possible, through the plugin).
-- The weather (`weather.rs`) still looks for Windows' code shape: not found on the Mac.
+- The weather (`weather.rs`) still looks for Windows' code shape: not found on the Mac. 1.57 registers the save's
+  `stored_weather_change_timer` (a float) at `+0x4C4` and `stored_current_weather` at `+0x4C8` of the economy unit,
+  but no code copies them in as 1.61's does (its save serialises the unit by that field table): the live weather
+  object is still to be found (by watching the memory as the weather turns, through the plugin).
 - Units: the cabin writes km always (on Windows too); the owner's game is in miles.
