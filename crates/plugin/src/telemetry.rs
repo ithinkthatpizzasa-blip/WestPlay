@@ -243,7 +243,6 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
                 // Whether the player's keys type into WestPlay's field: they stop the moment the truck moves.
                 crate::typing::update(speed, paused);
                 // The end of a frame is on the game's main thread, where its navigator may be changed.
-                #[cfg(windows)]
                 crate::navigation::serve();
             }
             _ => {}

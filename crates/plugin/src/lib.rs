@@ -5,8 +5,9 @@
 //! (`sdk reload`). Under TruckersMP its client loads it too, as one of its own plugins (`truckersmp_init`:
 //! `truckersmp`; Windows only, TruckersMP has no macOS client).
 //!
-//! On macOS the game draws with OpenGL (`gl`) and takes its input from its own Cocoa event loop (`input`); what
-//! finds the game's own code (`camera`, `mod_mount`, `navigation`) is Windows' so far: docs/MACOS_PORT.md.
+//! On macOS the game draws with OpenGL (`gl`) and takes its input from its own Cocoa event loop (`input`); the app
+//! reads the game's memory through the plugin (`memory`); `camera` and `mod_mount` are Windows' so far:
+//! docs/MACOS_PORT.md.
 
 mod bridge;
 #[cfg(windows)]
@@ -26,7 +27,6 @@ mod log;
 mod memory;
 #[cfg(windows)]
 mod mod_mount;
-#[cfg(windows)]
 mod navigation;
 mod screens;
 mod scs;
