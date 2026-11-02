@@ -11,6 +11,7 @@
 
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use westplay_shared::frames::{FrameReader, FramesMapping};
 use westplay_shared::{
@@ -199,11 +200,13 @@ impl Textures {
             let unpacking = Unpacking::set(gl);
             match latest {
                 Some((_, pixels)) => {
+                    let started = Instant::now();
                     gl.write_rows(0, SCREEN_WIDTH as i32, SCREEN_HEIGHT as i32, pixels.as_ptr());
                     let row_bytes = SCREEN_WIDTH as usize * 4;
                     for (row, from) in rows(height).skip(SCREEN_HEIGHT as usize) {
                         gl.write_rows(row as i32, SCREEN_WIDTH as i32, 1, pixels[from as usize * row_bytes..].as_ptr());
                     }
+                    with_upload_stats(|stats| stats.wrote(started.elapsed()));
                 }
                 None => {
                     if self.transparent.is_empty() {
@@ -328,6 +331,78 @@ pub(super) fn release_unused(frame: u64) -> bool {
         log!("{} screen textures unused, {} in use", before - textures.screens.len(), textures.screens.len());
         textures.screens.is_empty()
     })
+}
+
+/// How often what writing app frames costs is logged, while they're written.
+const STATS_EVERY: Duration = Duration::from_secs(10);
+
+/// What writing app frames into the screen textures costs the game: the time of each write in its frame (the
+/// upload as the game's thread pays it; the GPU's copy is its own), and the game's frames, those with a write and
+/// those without.
+#[derive(Default)]
+struct UploadStats {
+    since: Option<Instant>,
+    /// When the last game frame ended, and whether a frame was written in the one going on.
+    frame_ended: Option<Instant>,
+    in_frame: bool,
+    writes: u32,
+    write_time: Duration,
+    write_most: Duration,
+    frames_with: (u32, Duration),
+    frames_without: (u32, Duration),
+}
+
+static UPLOAD_STATS: Mutex<Option<UploadStats>> = Mutex::new(None);
+
+fn with_upload_stats(f: impl FnOnce(&mut UploadStats)) {
+    f(UPLOAD_STATS.lock().unwrap_or_else(|e| e.into_inner()).get_or_insert_with(UploadStats::default));
+}
+
+impl UploadStats {
+    fn wrote(&mut self, took: Duration) {
+        self.in_frame = true;
+        self.writes += 1;
+        self.write_time += took;
+        self.write_most = self.write_most.max(took);
+    }
+
+    /// A game frame ended now: counted, and every [`STATS_EVERY`] logged if frames were written meanwhile.
+    fn frame_ended(&mut self, now: Instant) {
+        if let Some(before) = self.frame_ended {
+            let frames = if self.in_frame { &mut self.frames_with } else { &mut self.frames_without };
+            frames.0 += 1;
+            frames.1 += now - before;
+        }
+        self.frame_ended = Some(now);
+        self.in_frame = false;
+        let since = *self.since.get_or_insert(now);
+        let over = now - since;
+        if over < STATS_EVERY {
+            return;
+        }
+        if self.writes > 0 {
+            let ms = |time: Duration, count: u32| time.as_secs_f64() * 1000.0 / f64::from(count.max(1));
+            let frames = self.frames_with.0 + self.frames_without.0;
+            log!(
+                "frame uploads: {} in {:.1} s ({:.1} a second), {:.2} ms each on average, {:.2} ms at most; game frames {} ({:.1} a second): {:.2} ms with an upload, {:.2} ms without",
+                self.writes,
+                over.as_secs_f64(),
+                f64::from(self.writes) / over.as_secs_f64(),
+                ms(self.write_time, self.writes),
+                self.write_most.as_secs_f64() * 1000.0,
+                frames,
+                f64::from(frames) / over.as_secs_f64(),
+                ms(self.frames_with.1, self.frames_with.0),
+                ms(self.frames_without.1, self.frames_without.0),
+            );
+        }
+        *self = UploadStats { frame_ended: self.frame_ended, since: Some(now), ..UploadStats::default() };
+    }
+}
+
+/// The end of a game frame (the frame clock).
+pub fn frame_ended() {
+    with_upload_stats(|stats| stats.frame_ended(Instant::now()));
 }
 
 pub fn log_stats() {

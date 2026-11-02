@@ -450,6 +450,7 @@ unsafe extern "C-unwind" fn flush_buffer_hook(this: *mut AnyObject, cmd: Sel) {
 unsafe fn on_flush(context: *mut c_void) {
     let frame = FRAME.fetch_add(1, Ordering::Relaxed) + 1;
     screens::on_frame(frame);
+    screens::frame_ended();
     // The interaction key's toggle, then the keybinds (which may need it); then whether the screen is used, each
     // frame (else asked only as a mouse event comes: the screen stayed in use, its cursor shown, after the key was
     // let go until the mouse moved).
