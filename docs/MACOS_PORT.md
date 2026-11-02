@@ -556,3 +556,21 @@ game does to draw, and reads it back:
 - Shutdown: the context's table as it was.
 - Cost: a bind with a new frame, plus a `glFinish` to wait for the upload, 1.3–1.5 ms on average (7–8 ms at most,
   the first); a bind with nothing new, under 1 µs. To measure in the game (the game doesn't wait for the upload).
+
+### In the game (2026-11-02, the owner's Scania S with the Smart Dash Advanced, 1.57.2.7, OpenGL)
+
+- The plugin loads (`plugin.log`: 24/24 telemetry channels, the context current at init hooked), reads the truck
+  (`vehicle.scania.s_2016`) and the job, and finds the Smart Dash Advanced's screen texture as the game binds it:
+  `scania-2025-advanced`, texture 286, 1280 × 725, the WestPlay screens mod (`westplay.scs` in the game's `mod`
+  folder, switched on in the Mod Manager: the plugin doesn't mount it on macOS yet).
+- First try: the screen black. The plugin's frame clock had never run: 1.57 ends a frame one of three ways (its code
+  read: `-[NSOpenGLContext flushBuffer]`, `glFlush`, or `glFlushRenderAPPLE` then `glSwapAPPLE`) and takes the last,
+  so neither the heartbeat nor the game's pid reached the host ("game not running"), which never switched the screen
+  on: the plugin kept it transparent, and the Advanced's screen (WestPlay's own script) shows black then. With the
+  table's `swap_APPLE` hooked too: "first flush … on the main thread", the host "game connected, screen drawing".
+- **WestPlay's cabin shows on the truck's screen** (owner, 2026-11-02).
+- The host restarted while the game ran (to another page and back): the screen took the new host's frames, nothing
+  else needed.
+- The game's rate, as the host counts it (10 s at a time, parked in the cab): 29–44 fps with the cabin idle (2 frames a
+  second sent), 35–40 fps with the host's test page (5–17 frames a second sent): no difference to be seen at those
+  rates. The cost at 60 frames a second (a video) is still to be measured, in the plugin itself.
