@@ -32,6 +32,16 @@ fn main() {
     if let Ok(pid) = std::env::var("GAME_PID") {
         b.plugin.pid.store(pid.parse().unwrap(), Ordering::Release);
     }
+    // `TRUCK` (e.g. `vehicle.scania.s_2016`): sat in that truck, the driver's head in its seat, the cab's screen
+    // drawn each frame, so the music plays from its speakers; while the file `OUTSIDE` names exists, the cab isn't
+    // drawn (the camera outside, the sound muffled).
+    // `TRUCK=none`: no truck (one written before forgotten).
+    let truck = std::env::var("TRUCK").ok();
+    if truck.as_deref() == Some("none") {
+        b.plugin.truck.write(&westplay_shared::TruckInfo::default());
+    }
+    let truck = truck.filter(|id| id != "none");
+    let outside = std::env::var("OUTSIDE").ok();
     let telemetry = westplay_shared::Telemetry {
         electric_enabled: true,
         engine_enabled: true,
@@ -40,13 +50,33 @@ fn main() {
         local_scale: 19.0,
         x: -31000.0,
         z: -5000.0,
+        cabin_y: 1.295,
+        cabin_z: -2.246,
+        head_x: if truck.is_some() { -0.68 } else { 0.0 },
+        head_y: if truck.is_some() { 1.6 } else { 0.0 },
+        head_z: if truck.is_some() { -0.4 } else { 0.0 },
         ..Default::default()
     };
+    if let Some(id) = &truck {
+        let brand = id.trim_start_matches("vehicle.").split('.').next().unwrap_or("");
+        b.plugin.truck.write(&westplay_shared::TruckInfo {
+            brand_id: westplay_shared::FixedStr::new(brand),
+            brand: westplay_shared::FixedStr::new(brand),
+            id: westplay_shared::FixedStr::new(id),
+            name: westplay_shared::FixedStr::new(id),
+            ..Default::default()
+        });
+    }
+    let in_cab = truck.is_some();
     std::thread::spawn(move || {
         let bridge = BridgeMapping::open().unwrap();
+        let plugin = &bridge.bridge().plugin;
         loop {
-            bridge.bridge().plugin.telemetry.write(&telemetry);
-            bridge.bridge().plugin.heartbeat.fetch_add(1, Ordering::Release);
+            plugin.telemetry.write(&telemetry);
+            let frame = plugin.heartbeat.fetch_add(1, Ordering::Release) + 1;
+            if in_cab && !outside.as_deref().is_some_and(|file| std::path::Path::new(file).exists()) {
+                plugin.screen_frame.store(frame, Ordering::Release);
+            }
             sleep(Duration::from_millis(16));
         }
     });
