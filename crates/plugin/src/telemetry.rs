@@ -238,11 +238,9 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
                     };
                     bridge.plugin.telemetry.write(&published);
                 }
-                #[cfg(windows)]
                 let (speed, paused) = (snapshot.speed, snapshot.paused);
                 drop(snapshot);
                 // Whether the player's keys type into WestPlay's field: they stop the moment the truck moves.
-                #[cfg(windows)]
                 crate::typing::update(speed, paused);
                 // The end of a frame is on the game's main thread, where its navigator may be changed.
                 #[cfg(windows)]

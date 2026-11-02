@@ -5,8 +5,8 @@
 //! (`sdk reload`). Under TruckersMP its client loads it too, as one of its own plugins (`truckersmp_init`:
 //! `truckersmp`; Windows only, TruckersMP has no macOS client).
 //!
-//! On macOS the game draws with OpenGL (`gl`), and what finds the game's own code (`camera`, `mod_mount`,
-//! `navigation`) and its input (`input`, `keyboard`, `keybinds`, `typing`) is Windows' so far: docs/MACOS_PORT.md.
+//! On macOS the game draws with OpenGL (`gl`) and takes its input from its own Cocoa event loop (`input`); what
+//! finds the game's own code (`camera`, `mod_mount`, `navigation`) is Windows' so far: docs/MACOS_PORT.md.
 
 mod bridge;
 #[cfg(windows)]
@@ -18,11 +18,8 @@ mod frame;
 #[cfg(target_os = "macos")]
 mod gl;
 mod hooks;
-#[cfg(windows)]
 mod input;
-#[cfg(windows)]
 mod keybinds;
-#[cfg(windows)]
 mod keyboard;
 mod log;
 #[cfg(windows)]
@@ -34,7 +31,6 @@ mod scs;
 mod telemetry;
 #[cfg(windows)]
 mod truckersmp;
-#[cfg(windows)]
 mod typing;
 
 use std::ffi::{CStr, CString};
@@ -99,6 +95,10 @@ unsafe fn init(version: u32, params: *const TelemetryInitParamsV100) -> i32 {
             if let Err(e) = keyboard::install() {
                 log!("keyboard hook install failed: {e}");
             }
+        }
+        #[cfg(target_os = "macos")]
+        if let Err(e) = input::install() {
+            log!("input hook install failed: {e}");
         }
         #[cfg(windows)]
         let graphics = d3d::install();

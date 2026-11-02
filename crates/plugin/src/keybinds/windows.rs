@@ -8,9 +8,27 @@ pub fn sided(key: u32, lparam: isize) -> u32 {
     let extended = (lparam >> 24) & 1 != 0;
     let scancode = (lparam >> 16) & 0xff;
     match key {
-        VK_SHIFT => if scancode == 0x36 { VK_RSHIFT } else { VK_LSHIFT },
-        VK_CONTROL => if extended { VK_RCONTROL } else { VK_LCONTROL },
-        VK_MENU => if extended { VK_RMENU } else { VK_LMENU },
+        VK_SHIFT => {
+            if scancode == 0x36 {
+                VK_RSHIFT
+            } else {
+                VK_LSHIFT
+            }
+        }
+        VK_CONTROL => {
+            if extended {
+                VK_RCONTROL
+            } else {
+                VK_LCONTROL
+            }
+        }
+        VK_MENU => {
+            if extended {
+                VK_RMENU
+            } else {
+                VK_LMENU
+            }
+        }
         k => k,
     }
 }

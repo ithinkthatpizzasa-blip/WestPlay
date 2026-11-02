@@ -1,6 +1,8 @@
 //! Typing on Windows: what a key types in the player's Windows keyboard layout.
 
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CONTROL, VK_MENU};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetKeyboardLayout, GetKeyboardState, ToUnicodeEx, VK_CONTROL, VK_MENU,
+};
 
 use super::{key_meaning, queue};
 
