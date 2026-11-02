@@ -542,8 +542,9 @@ impl Stage {
         let mut layers = lock(&self.shared.layers);
         layers.retain(|layer| layer.id != view.id);
         let (width, height) = view.size.get();
-        let layer =
-            Layer { id: view.id, view: view.view.clone(), x: 0.0, y: 0.0, width, height, scale: 1.0, shown: true };
+        // Hidden before it was added (a player, until the cabin shows it): it stays hidden.
+        let shown = view.shown.get();
+        let layer = Layer { id: view.id, view: view.view.clone(), x: 0.0, y: 0.0, width, height, scale: 1.0, shown };
         if on_top {
             layers.push(layer)
         } else {
@@ -592,6 +593,8 @@ pub struct OffscreenWebView {
     stage: Arc<StageShared>,
     /// Its page's size, as last placed.
     size: Cell<(u32, u32)>,
+    /// Whether it shows on the stage, as last said ([`OffscreenWebView::show`]): kept for when it's added.
+    shown: Cell<bool>,
     inbox: SharedInbox,
     folders: SharedFolders,
     /// Its delegates and handlers, kept alive with it (WebKit holds its delegates weakly).
@@ -625,6 +628,7 @@ impl OffscreenWebView {
             view,
             stage: stage.shared.clone(),
             size: Cell::new((width, height)),
+            shown: Cell::new(true),
             inbox,
             folders,
             _delegates: delegates,
@@ -789,6 +793,7 @@ impl OffscreenWebView {
 
     /// Whether the WebView shows on the stage (hidden, its page runs on: a video still plays its sound).
     pub fn show(&self, shown: bool) -> Result<()> {
+        self.shown.set(shown);
         if let Some(layer) = lock(&self.stage.layers).iter_mut().find(|layer| layer.id == self.id) {
             layer.shown = shown;
         }
