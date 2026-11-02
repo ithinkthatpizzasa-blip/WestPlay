@@ -690,3 +690,14 @@ game's folder (the app's setup chooses it otherwise, not run on this Mac yet).
   but no code copies them in as 1.61's does (its save serialises the unit by that field table): the live weather
   object is still to be found (by watching the memory as the weather turns, through the plugin).
 - Units: the cabin writes km always (on Windows too); the owner's game is in miles.
+
+### The video's frame rate in the cabin (2026-11-02)
+
+The 11–15 frames a second measured above were the **debug-built** host's: its main thread (WebKit's, where the
+snapshots are composited and each frame compared with the last, 3.7 MB) is far slower unoptimised. The release
+build (`cargo build --release -p westplay-host`, `target/release/westplay-host`), the one to measure and test with:
+- the host's test page alone, no game: 57–60 frames a second captured and sent;
+- a YouTube video in the cabin (two WebViews snapshotted each round, the cabin page over the player), the game at
+  30–35 fps: 17–19 frames a second sent, each written into the screen in 1.1 ms (the plugin's log). Owner: "smooth
+  enough". Still short of a video's 25–30: a round snapshots every WebView shown and composites them on the main
+  thread; snapshotting the cabin page only when it changes would leave the player's alone in most rounds.
