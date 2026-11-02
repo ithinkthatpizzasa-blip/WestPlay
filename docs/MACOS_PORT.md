@@ -441,3 +441,51 @@ screen), YouTube Music, the Spotify player playing in the cabin, the cab speaker
 
 Note: the performance line counts only the app's own processor time when the host is run from a terminal (macOS makes
 the terminal, not the host, responsible for WebKit's processes then); to be checked in the companion app.
+
+### Spotify, YouTube Music and the cab's speakers in the cabin (2026-11-02)
+
+Driven as before (the plugin's stand-in, `tools/macos_probe/bridge_peer`'s `drive`, now also sitting in a truck:
+`TRUCK=vehicle.scania.s_2016` writes the truck and the driver's head in its seat, and draws the cab's screen each
+frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` forgets the truck).
+
+- **Spotify signed in** through WestPlay's sign-in window (owner), its home in the cabin ("Made For …"), and **plays
+  there, heard** (owner): Spotify's own web player in WestPlay's WebKit (the Spotify app wasn't running).
+  - The stand-in is the game only while `drive` runs: as it ends, the electrics go off and the music stops, as
+    meant. Keep one running (`drive wait 1800000`) for anything to be listened to.
+- **YouTube Music**: opens, its real Quick picks (signed out), plays, **heard** (owner). The owner doesn't use it:
+  it stays in the cabin, not signed in to or tested further.
+- **Spotify through the truck's speakers (`cab_sound.js`): not on macOS.** Spotify's songs are protected
+  (FairPlay here: the element has `mediaKeys`), and WebKit gives Web Audio nothing of a protected element: taken
+  with `createMediaElementSource`, its node gives silence (`AnalyserNode` on it: 0, the context running, the
+  element the one playing), while WebKit plays the song itself, straight out, as if it hadn't been taken. So
+  Spotify is heard, but as the page's own sound: not from the cab's speakers around the head, not muffled with the
+  camera outside, not through the tone (Settings › Sound), and no spectrum. The page's check says so in the host's
+  log ("[spotify] speakers: silent while playing"). WebView2's Widevine allows it, which is why Windows has it.
+  To decide (owner): leave Spotify's sound as it is on macOS (and not take its element, so the log doesn't
+  cry silence), give it what the element's `volume` can (the fades, the camera outside as quieter), or take
+  WebKit's sound outside the page (a Core Audio process tap, macOS 14.4+) and do the speakers natively: much more.
+  Apple Music's would be the same (FairPlay); YouTube's and YouTube Music's aren't protected.
+- The cabin's sign-in note says "Finish signing in on your PC": to say "Mac" (or neither) on macOS.
+
+### The companion app on macOS (2026-11-02)
+
+- **Builds and runs**: its four Windows-only parts made macOS's. The pickers' owner (Windows' window handle;
+  macOS's panels are the app's own, `customize::owner`); and the step that removes WestPlay's data after it quits
+  (Windows: PowerShell, hidden): on macOS a shell script in a process group of its own, which waits for WestPlay's
+  process to end and removes the paths (no uninstaller: the app is a bundle). Tested for real
+  (`the_shell_step_removes_a_folder_once_the_process_has_ended`). A test of the maps' server took `C:` for a way
+  out of the folder, which only Windows has: Windows' check kept, elsewhere it must stay in the folder.
+- `cargo test -p westplay-app` passes on macOS; `cargo xwin check -p westplay-app --all-targets` still passes.
+- Started (`target/debug/westplay` in a hand-made `.app`, the UI's dev server): its host and cabin start as the
+  standalone host's. Clicked through the setup up to Install (not pressed: there's no Mac plugin yet):
+  - "Your game": found (Steam's, 1.57.2.7, 102 DLCs). "Use a Different Folder…" opens macOS's panel, titled in
+    WestPlay's words; cancelled, nothing changed.
+  - "Here's your setup": version, 102 DLCs, the 9 map DLCs, 3 profiles, the trucks (Jasper's DAF: "Mod not
+    installed"), and "built for 1.61, yours not tested yet".
+  - **Its window showed only after 8 s** ("app: window shown without its page ready"): the window starts hidden
+    and the page shows it after two animation frames, which WebKit doesn't draw for a window not shown (WebView2
+    does). The page now also shows it 200 ms after it's ready while it's hidden (`useShowWhenReady`): shown at
+    1.2 s, drawn.
+  - Says "on this PC" ("WestPlay found Euro Truck Simulator 2 on this PC"), as the cabin's sign-in note does: the
+    words for macOS to do.
+- Bundling (`bundle.active` false, Windows' installer): the Mac's `.app` and its signing are still to do (Phase 4).
