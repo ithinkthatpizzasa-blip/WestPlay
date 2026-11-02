@@ -37,8 +37,9 @@ fn main() {
         // Nothing kept: the standalone host has no settings file.
         on_settings: Box::new(|_| {}),
         customize_changed: Arc::default(),
-        // No map for the standalone host: the app's setup chooses the game.
-        game: Arc::default(),
+        // No map for the standalone host, unless `WESTPLAY_GAME` names the game's folder (developing): the app's
+        // setup chooses the game.
+        game: Arc::new(westplay_host::maps::SetUpGame::new(std::env::var_os("WESTPLAY_GAME").map(PathBuf::from))),
         on_status: Box::new(|status| {
             println!(
                 "frames/s {:>3} (dropped total {}), game {}, screen {}{}",

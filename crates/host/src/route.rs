@@ -392,6 +392,11 @@ fn resolve_junctions(pending: Receiver<JunctionJob>, sender: Sender<RouteUpdate>
             nodes.iter().map(|node| junctions::RouteNode { uid: node.uid, position: node.position }).collect();
         match junctions.junctions(&route) {
             Ok(found) => {
+                log!(
+                    "route: {} junctions along route {id} ({} with a turn to say)",
+                    found.junctions.len(),
+                    found.junctions.iter().filter(|junction| junction.maneuver.is_some()).count()
+                );
                 let maneuvers =
                     found.junctions.iter().filter_map(|junction| Some((junction.span, junction.maneuver?))).collect();
                 let paths = found.junctions.into_iter().map(|junction| (junction.span, junction.path)).collect();
