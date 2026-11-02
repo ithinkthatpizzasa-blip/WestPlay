@@ -675,15 +675,14 @@ owner's (ProMods' seven packs) in 470 s, 149 MB. The standalone host builds one 
 game's folder (the app's setup chooses it otherwise, not run on this Mac yet).
 
 **Not done in 3d yet:**
-- `mod_mount`: 1.57 has the same mount as 1.6x, taking the same request (0x28 bytes: kind, pool, path, name, flag, priority,
-  flag, extra) at `+0x1AACC70`: it joins the path to a prefix when the game has one set, makes the device
-  (`+0x1AB0A70`) and adds it to the pool (`+0x1AB0B50` → `+0x19C3040`: device, pool, mount point, priority). The game's
-  own archives' requests (a table at `+0x254B638`…): kind 4 (Windows' 1.6x: 3), flags 1 and 1, `extra` 3 or 4 (1.6x
-  wants it under 3), pools 0 and 3; the mod pool is 2 (the Mod Manager opens a mod's icons there), as 1.61. No pool
-  index to rebuild (its log says `[fs] device … mounted.`, like 1.58). Not tried: the right `extra` and flags for a
-  mod's archive are a guess until seen, a wrong one at the game's start may stop it, and trying it means taking
-  `westplay.scs` out of the game's `mod` folder (two copies stop the game). Meanwhile the screen mod stays switched on
-  in the Mod Manager.
+- `mod_mount`: built for the Mac (`mod_mount/macos.rs`). 1.57 has the same mount as 1.6x, taking the same request
+  (`+0x1AACC70`); its device maker (`+0x1AB0A70`) opens kind 3 as HashFS, else zip, with `extra` under 3, as 1.6x
+  (the game's own archives are kind 4, HashFS alone), so the Windows request stands: kind 3, the mod pool 2, priority
+  99999. No pool index (as 1.58). Tried once (2026-11-02): with `westplay.scs` in `~/Library/Application
+  Support/WestPlay/`, the game's log said `[zipfs] westplay.scs: Created, 207 entries` and `[fs] device …
+  mounted.`, and the game ran on; the cab wasn't reached. The owner keeps the screen mod in the game's `mod` folder,
+  switched on in the Mod Manager (taking it out showed it missing there, and isn't wanted): with it there the plugin
+  mounts nothing (two copies stop the game), so nothing changes for them.
 - `camera`: no `subss` triple like Windows'; Apple's compiler writes and reads it otherwise. To be found by probing
   the running game's memory (now possible, through the plugin).
 - The weather (`weather.rs`) still looks for Windows' code shape: not found on the Mac. 1.57 registers the save's
