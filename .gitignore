@@ -28,3 +28,4 @@ dist/
 *.key
 /tools/macos_probe/*.dylib
 .DS_Store
+/tools/macos_probe/bridge_peer/target/

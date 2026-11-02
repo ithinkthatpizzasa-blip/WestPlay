@@ -1,0 +1,8 @@
+[package]
+name = "peer"
+version = "0.1.0"
+edition = "2024"
+[dependencies]
+westplay-shared = { path = "../../../crates/shared" }
+png = "0.18"
+[workspace]
