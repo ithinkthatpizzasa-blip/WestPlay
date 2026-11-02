@@ -145,7 +145,7 @@ keyboard, mouse and trackpad). The other plugin here logs "hotkeys ready (Input 
 the Input Monitoring permission (IOHID or an event tap). WestPlay's plan stays the one in the brief: swizzle
 `-[NSApplication sendEvent:]` / the game window's `sendEvent:` inside the game, needing no permission; checked in
 Phase 3 whether the game's mouse look comes through Cocoa events or HID (if HID, held-back Cocoa events won't stop
-the camera turning).
+the camera turning). (Phase 3: Cocoa events, its own event loop; see "Input in the game".)
 
 ### TruckersMP: doesn't apply
 
@@ -515,8 +515,8 @@ What else was read from the game's executable (`nm -u`, its strings):
 - Input: it pumps its own events (`nextEventMatchingMask:untilDate:inMode:dequeue:`, `sendEvent:`), reads the mouse's
   `deltaX`/`deltaY` from them, warps and detaches the cursor (`CGWarpMouseCursorPosition`,
   `CGAssociateMouseAndMouseCursorPosition`), and also listens to HID devices itself
-  (`IOHIDDeviceRegisterInputValueCallback`, `IOHIDRequestAccess`). Which of these its keys and mouse look come
-  through is to be seen in the game (3c).
+  (`IOHIDDeviceRegisterInputValueCallback`, `IOHIDRequestAccess`). Its keys and mouse look come through its events
+  alone (3c, below).
 - It's built against the macOS 15.4 SDK with the classic dyld info (`LC_DYLD_INFO_ONLY`, no chained fixups).
 
 ### The plugin (`crates/plugin`)
@@ -529,7 +529,11 @@ behind `cfg(windows)`; what both share is split out of it:
 |---|---|---|---|
 | `hooks` | the panic guards (`guarded`, `contained`) | MinHook (`hooks/windows.rs`) | an entry of a table pointed at the detour, put back on removal (`hooks/macos.rs`) |
 | `screens` | which screen shows WestPlay in which truck (`drawing`), the cab's mark, a truck changing | the textures in Direct3D 11, by their views (`screens/windows.rs`) | the textures in OpenGL, by their names (`screens/macos.rs`) |
-| Frame clock | | `IDXGISwapChain::Present` (`d3d.rs`) | `-[NSOpenGLContext flushBuffer]` (`gl.rs`) |
+| Frame clock | | `IDXGISwapChain::Present` (`d3d.rs`) | the table's `swap_APPLE`, `-[NSOpenGLContext flushBuffer]` (`gl.rs`) |
+| `input` | when the screen is used, the interaction key (held or toggled), a button the game holds | DirectInput (`input/windows.rs`) | the game's event loop (`input/macos.rs`) |
+| `keyboard` | which keys are kept from the game | its window messages, `GetAsyncKeyState` (`keyboard/windows.rs`) | its event loop; a Mac key's virtual-key code (`keyboard/macos.rs`) |
+| `keybinds` | everything but a message's Shift/Ctrl/Alt side (`keybinds/windows.rs`) | | |
+| `typing` | when keys type (the gate), keys with meanings of their own | `ToUnicodeEx` (`typing/windows.rs`) | `UCKeyTranslate`, dead keys kept (`typing/macos.rs`) |
 | Frames | | the shared D3D11 texture (`frame.rs`) | the frame block (`westplay_shared::frames`), written into the texture with `glTexSubImage2D` |
 | Log | `Documents\WestPlay\logs` | | `~/Library/Application Support/WestPlay/logs` |
 
@@ -540,8 +544,7 @@ On macOS a texture is known by its name: the first time the game binds one, its 
 Each time a screen texture is bound and a newer app frame is there, it's written in through the game's own context,
 the context's unpacking state (unpack buffer, alignment, row length, skips) set for it and put back after.
 
-Not on macOS yet: input (`input`, `keyboard`, `keybinds`, `typing`: 3c), and what finds the game's own code
-(`camera`, `mod_mount`, `navigation`: 3d). TruckersMP's part is Windows only (no Mac client, Phase 0).
+Not on macOS yet: what finds the game's own code (`camera`, `mod_mount`, `navigation`: 3d). TruckersMP's part is Windows only (no Mac client, Phase 0).
 
 ### Checked without the game (`tools/macos_probe/bridge_peer`'s `harness`)
 
@@ -573,4 +576,59 @@ game does to draw, and reads it back:
   else needed.
 - The game's rate, as the host counts it (10 s at a time, parked in the cab): 29–44 fps with the cabin idle (2 frames a
   second sent), 35–40 fps with the host's test page (5–17 frames a second sent): no difference to be seen at those
-  rates. The cost at 60 frames a second (a video) is still to be measured, in the plugin itself.
+  rates. The cost at 60 frames a second (a video) is measured in the plugin itself (3c, below).
+
+### Input in the game (3c, 2026-11-02)
+
+How 1.57 takes the keyboard and the mouse (its code read, `objdump` of the executable):
+- HID isn't it. Its `IOHIDManager` matches every device (the `[hid] Detected HID device` lines name the keyboard, mouse
+  and trackpad) but takes only joysticks and gamepads (`IOHIDDeviceConformsTo` usage page 1, usages 4 and 5), and
+  can't open them anyway without the Input Monitoring permission (`<ERROR> [hid] Failed to open HIDManager (error code
+  e00002c7)`, `kIOReturnNotPermitted`, in the owner's `game.log`).
+- Its own event loop is: once a frame, `[NSApp nextEventMatchingMask:NSEventMaskAny untilDate:distantPast inMode:
+  dequeue:YES]` until it gives none, each event read by type (a jump table) and then handed to `sendEvent:`. Mouse
+  moved and dragged: `deltaX`/`deltaY` into its input; keys: `keyCode` (through its own table to its key numbers) and
+  `characters` for text; `flagsChanged` for the modifiers; the wheel's `deltaY`. Its views' `keyDown:`,
+  `mouseMoved:`… are empty. It also polls the modifiers with `CGEventSourceKeyState(0, …)`.
+
+So the plugin hooks that one method, `-[NSApplication nextEventMatchingMask:untilDate:inMode:dequeue:]` (its
+implementation swapped, data as the other hooks; in the game it was already another's, `0x112412fa0`, probably
+Steam's overlay: WestPlay calls on through it). An event it holds back is taken from the queue and never seen by the
+game or by AppKit, and the next is asked for: no permission, no event tap.
+- While the screen is used (the interaction key held, or toggled), mouse movement (points, whole counts passed on and
+  the rest kept), the wheel (lines × 120, DirectInput's notch) and new presses go to the pointer block; a button the
+  game saw go down still comes up for it.
+- Typing into a WestPlay field: every key event but the F-keys and Command's shortcuts (Quit, Hide…; but Cmd+V pastes
+  and Cmd+Delete takes text back) is held back, and a press is what the Mac's current layout types
+  (`UCKeyTranslate`, its dead-key state kept: Option-E then E types é). Option+Delete takes a word back. The modifiers'
+  own events always reach the game.
+- Keybinds: a bound key's presses are held back while its binding counts, as on Windows.
+- Which keys are down: the modifiers as the game asks (`CGEventSourceKeyState`, the session's state, each side by its
+  key code), the mouse buttons from `+[NSEvent pressedMouseButtons]`, other keys from the events the game takes.
+  `+[NSEvent modifierFlags]`' side bits never showed left Option down (first try in the game: the camera turned).
+- Keys are named by Windows' virtual-key codes, as the app's settings hold them, the way WebKit names a Mac's keys to
+  the companion: letters, digits and punctuation by what the layout puts on them, the rest by their key code.
+- Whether the screen is used is asked every frame too (first try: it stayed on, its cursor shown, after Option was let
+  go until the mouse moved).
+
+Seen in the game with the owner (Scania S, Smart Dash Advanced): holding left Option, the mouse moves WestPlay's
+cursor and clicks land, the camera stays still; let go, the camera is the mouse's again, the screen off within 10 ms.
+Typing into YouTube's search with the Mac keyboard works (é by Option-E, Return searches), the truck not reacting.
+**The screen looks right** (owner): the right way up, its colours as on a computer screen. Keybinds aren't tried in the
+game (none set).
+
+Found on the way, in the host: on macOS `Stage::add` made every layer shown, so a player hidden before it was added
+stayed shown. Spotify's never gets another word, so its page covered YouTube's video wherever the cabin left the frame
+open for it (owner: "I can only see Spotify"). Fixed: a WebView's shown state is its own, kept when it's added.
+
+### What writing frames costs the game (3c, 2026-11-02)
+
+Measured in the plugin (`screens/macos.rs`, logged every 10 s while frames are written): the time each write takes on
+the game's thread (`glTexSubImage2D` of 1280 × 720, plus the extra row), and the game's frames with a write and without.
+With a YouTube video playing in the cabin:
+- A write: **1.1–1.4 ms** on average (10 s at a time), 8.8 ms at most.
+- Game frames with a write ran 2–4 ms longer than those without (26–36 fps, parked in the cab).
+- The screen is written at most once a game frame, so frames arriving at 60 a second cost the game one write each of its
+  frames (~30 a second here): about 1.2 ms of a ~30 ms frame.
+- But 60 frames a second never arrived: the Mac host captured and sent only 11–15 a second of the video (its log:
+  "12 captured"), the game at 27 fps. The host's capture rate on macOS is its own question (Phase 2's), not the plugin's.
