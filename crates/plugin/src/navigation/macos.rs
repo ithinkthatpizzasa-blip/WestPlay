@@ -212,9 +212,9 @@ pub unsafe fn locate() -> Option<Game> {
 }
 
 /// The game's executable as loaded: its code (`__TEXT,__text`) and C strings (`__TEXT,__cstring`).
-struct Image {
+pub(crate) struct Image {
     /// Where its Mach-O header is loaded.
-    base: usize,
+    pub(crate) base: usize,
     text: (usize, usize),
     cstrings: (usize, usize),
 }
@@ -224,7 +224,7 @@ impl Image {
     ///
     /// # Safety
     /// `base` is the header of a Mach-O image loaded in this process, for as long as the `Image` lives.
-    unsafe fn of(base: usize) -> Option<Self> {
+    pub(crate) unsafe fn of(base: usize) -> Option<Self> {
         const LC_SEGMENT_64: u32 = 0x19;
         // SAFETY: the header and its load commands lie at the start of the loaded image (the caller's contract).
         let u32_at = |at: usize| unsafe { ((base + at) as *const u32).read_unaligned() } as usize;
@@ -267,11 +267,17 @@ impl Image {
     }
 
     /// Where `pattern` starts in the code, if exactly once (`None` in it: any byte).
-    fn unique(&self, pattern: &[Option<u8>]) -> Option<usize> {
+    pub(crate) fn unique(&self, pattern: &[Option<u8>]) -> Option<usize> {
         let fits = |window: &[u8]| window.iter().zip(pattern).all(|(byte, wanted)| wanted.is_none_or(|w| *byte == w));
         let mut found = self.code().windows(pattern.len()).enumerate().filter(|(_, w)| fits(w));
         let (at, _) = found.next()?;
         found.next().is_none().then_some(self.text.0 + at)
+    }
+
+    /// `len` bytes of the code at the address `at`, if they lie within it.
+    pub(crate) fn code_at(&self, at: usize, len: usize) -> Option<&[u8]> {
+        let offset = at.checked_sub(self.text.0)?;
+        self.code().get(offset..offset.checked_add(len)?)
     }
 
     /// Where a RIP-relative lea at `at` (an address in the code) points.

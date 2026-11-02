@@ -6,8 +6,7 @@
 //! `truckersmp`; Windows only, TruckersMP has no macOS client).
 //!
 //! On macOS the game draws with OpenGL (`gl`) and takes its input from its own Cocoa event loop (`input`); the app
-//! reads the game's memory through the plugin (`memory`); `camera` and `mod_mount` are Windows' so far:
-//! docs/MACOS_PORT.md.
+//! reads the game's memory through the plugin (`memory`); `camera` is Windows' so far: docs/MACOS_PORT.md.
 
 mod bridge;
 #[cfg(windows)]
@@ -25,7 +24,6 @@ mod keyboard;
 mod log;
 #[cfg(target_os = "macos")]
 mod memory;
-#[cfg(windows)]
 mod mod_mount;
 mod navigation;
 mod screens;
@@ -98,6 +96,9 @@ unsafe fn init(version: u32, params: *const TelemetryInitParamsV100) -> i32 {
                 log!("keyboard hook install failed: {e}");
             }
         }
+        // WestPlay's screen mod, before the game mounts the profile's mods.
+        #[cfg(target_os = "macos")]
+        mod_mount::mount(&game_id);
         #[cfg(target_os = "macos")]
         if let Err(e) = input::install() {
             log!("input hook install failed: {e}");

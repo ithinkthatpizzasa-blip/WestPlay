@@ -34,6 +34,8 @@ mod macos;
 mod windows;
 
 #[cfg(target_os = "macos")]
+pub(crate) use macos::Image;
+#[cfg(target_os = "macos")]
 use macos::{Game, MODE, ROUTE, give, locate, waypoints};
 #[cfg(windows)]
 pub(crate) use windows::Image;
