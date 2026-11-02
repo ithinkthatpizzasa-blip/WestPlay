@@ -16,7 +16,7 @@ pub mod platform;
 
 use std::cell::UnsafeCell;
 use std::sync::LazyLock;
-use std::sync::atomic::{AtomicI32, AtomicU32, AtomicU64, Ordering, fence};
+use std::sync::atomic::{AtomicI32, AtomicU8, AtomicU32, AtomicU64, Ordering, fence};
 
 /// The bridge's name: its version in it, so an app and a plugin of different versions never share one (a
 /// bridge is laid out as whichever opened it first; one of another version, still held by a game or an app,
@@ -25,7 +25,7 @@ pub fn bridge_name() -> String {
     platform::shared_name(&format!("WestPlay.Bridge.v{BRIDGE_VERSION}"))
 }
 pub const BRIDGE_MAGIC: u32 = u32::from_le_bytes(*b"WPB7");
-pub const BRIDGE_VERSION: u32 = 24;
+pub const BRIDGE_VERSION: u32 = 25;
 
 /// Size of the app's frames, and the base size of the screen textures in the mod (`westplay_setup::game_mod`
 /// builds them from these).
@@ -199,6 +199,7 @@ pub struct Bridge {
     pub host: HostBlock,
     pub route: RouteBlock,
     pub typing: TypingBlock,
+    pub memory: MemoryBlock,
 }
 
 /// Written by the game plugin.
@@ -752,6 +753,28 @@ impl<T: Plain> SeqLock<T> {
         }
         None
     }
+}
+
+/// The most of the game's memory one read through the [`MemoryBlock`] carries.
+pub const MEMORY_READ_MAX: usize = 64 * 1024;
+
+/// The game's memory read for the app by the plugin, from inside the game (macOS: another program may read a
+/// process's memory only as a debugger may). One read at a time: the app asks for a range (its address and length,
+/// then the request's number), the plugin copies it into `data` and answers with the request's number, and whether
+/// all of it could be read (an address not mapped reads as nothing, never as a fault in the game).
+#[repr(C)]
+pub struct MemoryBlock {
+    /// The plugin: where the game's executable is loaded (its Mach-O header), 0 until it's known.
+    pub image_base: AtomicU64,
+    /// The app: the range wanted, then the request's number (each new one higher).
+    pub address: AtomicU64,
+    pub length: AtomicU32,
+    pub request: AtomicU64,
+    /// The plugin: the number of the request answered, and whether its range was read whole (1) or not (0).
+    pub answered: AtomicU64,
+    pub ok: AtomicU32,
+    /// The plugin: what was read, written before `answered`, read by the app after it.
+    pub data: [AtomicU8; MEMORY_READ_MAX],
 }
 
 /// A mapping of the [`Bridge`] shared memory. Whichever process maps it first creates it (zeroed).

@@ -22,6 +22,8 @@ mod input;
 mod keybinds;
 mod keyboard;
 mod log;
+#[cfg(target_os = "macos")]
+mod memory;
 #[cfg(windows)]
 mod mod_mount;
 #[cfg(windows)]
@@ -100,6 +102,8 @@ unsafe fn init(version: u32, params: *const TelemetryInitParamsV100) -> i32 {
         if let Err(e) = input::install() {
             log!("input hook install failed: {e}");
         }
+        #[cfg(target_os = "macos")]
+        memory::start();
         #[cfg(windows)]
         let graphics = d3d::install();
         #[cfg(target_os = "macos")]
@@ -159,6 +163,9 @@ unsafe fn shutdown() {
     }
     // Give any render-thread call that is still inside a detour time to return before the DLL can be unloaded.
     std::thread::sleep(std::time::Duration::from_millis(100));
+    // The thread reading the game's memory for the app runs the plugin's code: stopped before it can be unloaded.
+    #[cfg(target_os = "macos")]
+    memory::stop();
     // The log's thread runs the plugin's code: stopped before the plugin can be unloaded.
     log::shutdown();
     log!("shutdown");
