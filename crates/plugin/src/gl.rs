@@ -9,9 +9,11 @@
 //! - `tex_image2D`, `tex_storage2D`, `tex_sub_image2D`, `delete_textures`: a texture's contents made again, or its
 //!   name let go.
 //!
-//! The frame clock is `-[NSOpenGLContext flushBuffer]`, which the game calls at the end of each frame. The context
-//! it flushes is the one it draws with, and its table is hooked then if it wasn't already (at init, the context
-//! current on the game's main thread is). Each context hooked is held (`CGLRetainContext`) until the hooks are
+//! The frame clock is the end of the game's frame, which it ends one of three ways (1.57's code that does it):
+//! `-[NSOpenGLContext flushBuffer]`, `glFlush` (not hooked: called elsewhere too), or `glFlushRenderAPPLE` then
+//! `glSwapAPPLE` (the table's `swap_APPLE`, the one seen in the game, 2026-11-02). The context of that frame is the
+//! one it draws with, and its table is hooked then if it wasn't already (at init, the context current on the game's
+//! main thread is). Each context hooked is held (`CGLRetainContext`) until the hooks are
 //! removed, so its table is never freed while it may be put back.
 
 use std::ffi::c_void;
@@ -55,6 +57,7 @@ mod entry {
     pub const GET_INTEGERV: usize = 104;
     pub const GET_TEX_LEVEL_PARAMETERIV: usize = 125;
     pub const PIXEL_STOREI: usize = 195;
+    pub const SWAP_APPLE: usize = 590;
     pub const TEX_IMAGE_2D: usize = 301;
     pub const TEX_SUB_IMAGE_2D: usize = 307;
     pub const BIND_BUFFER: usize = 642;
@@ -72,6 +75,7 @@ type TexSubImage2DFn =
     unsafe extern "C" fn(Rend, GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, *const c_void);
 type BindBufferFn = unsafe extern "C" fn(Rend, GLenum, GLuint);
 type TexStorage2DFn = unsafe extern "C" fn(Rend, GLenum, GLsizei, GLenum, GLsizei, GLsizei);
+type SwapAppleFn = unsafe extern "C" fn(Rend);
 type FlushBufferFn = unsafe extern "C-unwind" fn(*mut AnyObject, Sel);
 
 static ORIG_BIND_TEXTURE: AtomicUsize = AtomicUsize::new(0);
@@ -79,6 +83,7 @@ static ORIG_DELETE_TEXTURES: AtomicUsize = AtomicUsize::new(0);
 static ORIG_TEX_IMAGE_2D: AtomicUsize = AtomicUsize::new(0);
 static ORIG_TEX_SUB_IMAGE_2D: AtomicUsize = AtomicUsize::new(0);
 static ORIG_TEX_STORAGE_2D: AtomicUsize = AtomicUsize::new(0);
+static ORIG_SWAP_APPLE: AtomicUsize = AtomicUsize::new(0);
 static ORIG_FLUSH_BUFFER: AtomicUsize = AtomicUsize::new(0);
 
 static FRAME: AtomicU64 = AtomicU64::new(0);
@@ -145,7 +150,7 @@ unsafe fn hook_context(context: *mut c_void) {
     // function of the signature given here (gliDispatch.h); held from now on, so the table outlives the hooks.
     unsafe {
         let table = (context as *mut usize).add(DISPATCH);
-        let hooks: [(usize, usize, &AtomicUsize, &str); 5] = [
+        let hooks: [(usize, usize, &AtomicUsize, &str); 6] = [
             (entry::BIND_TEXTURE, bind_texture_hook as BindTextureFn as usize, &ORIG_BIND_TEXTURE, "bind_texture"),
             (
                 entry::DELETE_TEXTURES,
@@ -166,6 +171,7 @@ unsafe fn hook_context(context: *mut c_void) {
                 &ORIG_TEX_STORAGE_2D,
                 "tex_storage2D",
             ),
+            (entry::SWAP_APPLE, swap_apple_hook as SwapAppleFn as usize, &ORIG_SWAP_APPLE, "swap_APPLE"),
         ];
         // All or none: a table of other functions is another renderer's.
         let other = hooks.iter().find(|(entry, detour, original, _)| {
@@ -405,6 +411,18 @@ unsafe extern "C" fn tex_storage_2d_hook(
         let original: TexStorage2DFn = std::mem::transmute(ORIG_TEX_STORAGE_2D.load(Ordering::Acquire));
         original(rend, target, levels, internal_format, width, height);
         contents_changed(target);
+    }
+}
+
+/// # Safety
+/// Called in place of the context's `swap_APPLE` (the end of a frame), with its arguments.
+unsafe extern "C" fn swap_apple_hook(rend: Rend) {
+    // SAFETY: the context current is the one swapped, live through its call; then the original (stored before the
+    // hook was switched on), with the game's arguments as they came.
+    unsafe {
+        guarded(|| on_flush(CGLGetCurrentContext()));
+        let original: SwapAppleFn = std::mem::transmute(ORIG_SWAP_APPLE.load(Ordering::Acquire));
+        original(rend)
     }
 }
 

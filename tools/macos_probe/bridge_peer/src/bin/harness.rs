@@ -136,6 +136,20 @@ fn main() {
     };
     assert_eq!(unsafe { init(1 << 16 | 1, &params) }, 0, "init");
 
+    // The end of a frame, as the game ends it (glFlushRenderAPPLE, then glSwapAPPLE): the plugin's frame clock.
+    unsafe {
+        type Swap = unsafe extern "C" fn();
+        let flush_render: Swap = std::mem::transmute(sym(gl, "glFlushRenderAPPLE"));
+        let swap: Swap = std::mem::transmute(sym(gl, "glSwapAPPLE"));
+        flush_render();
+        swap();
+    }
+    println!(
+        "after a frame: the plugin's heartbeat {}, its pid ours: {}",
+        b.plugin.heartbeat.load(Ordering::Acquire),
+        b.plugin.pid.load(Ordering::Acquire) == std::process::id()
+    );
+
     // The DAF 2021's screen texture, as the game makes it from the mod (sRGB, one level, the mod's own picture).
     let layout = screen_layouts().iter().position(|layout| layout.id == "daf-2021").unwrap();
     let height = ScreenLayout::texture_height(layout);
