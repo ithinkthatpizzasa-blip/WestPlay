@@ -1139,8 +1139,9 @@
   addEventListener('playing', (event) => keep(event.target), true)
   const cab = window.westplayCabSound?.(() => playingNow() ?? document.querySelector('audio, video'), post)
   // What the speakers made of it, said once each way for the host's log: the element found and played
-  // through them, none found while Spotify plays, or Spotify playing while the speakers hear nothing for 4 s
-  // on end (with how many elements it has played from, and whether the one taken is playing).
+  // through them, its own sound (protected, in WebKit: cab_sound.js), none found while Spotify plays, or Spotify
+  // playing while the speakers hear nothing for 4 s on end (with how many elements it has played from, and
+  // whether the one taken is playing).
   let saidCab = ''
   let quietSince = null
   const tellCab = () => {
@@ -1155,7 +1156,9 @@
         ? `silent while playing (${known.size} elements, taken one ${found?.paused ? 'paused' : 'playing'})`
         : levels
           ? `through the speakers (${found?.tagName.toLowerCase() ?? 'media'})`
-          : playing && !found
+          : playing && cab?.protected()
+            ? 'its own sound (protected)'
+            : playing && !found
             ? 'no media element found'
             : ''
     if (now && now !== saidCab) post({ speakers: (saidCab = now) })

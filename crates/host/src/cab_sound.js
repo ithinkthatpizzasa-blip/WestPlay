@@ -112,6 +112,24 @@ window.westplayCabSound = (media, say) => {
   let audio = null
   // Each element's way into the context, kept: an element can be taken in once only.
   const sources = new WeakMap()
+  // WestPlay's WebKit (macOS) gives Web Audio nothing of a protected element (FairPlay: Spotify's songs, Apple
+  // Music's): taken, its way gives silence, while WebKit plays it out itself as if it hadn't been. So there it's
+  // never taken, its sound the page's own (no speakers, walls, tone or spectrum). Known as it's given its keys
+  // (they're set some time after: taken in between, it would be silent).
+  const webkit = Boolean(window.__westplayWebview)
+  const keyed = new WeakSet()
+  if (webkit) {
+    for (const name of ['setMediaKeys', 'webkitSetMediaKeys']) {
+      const set = HTMLMediaElement.prototype[name]
+      if (!set) continue
+      HTMLMediaElement.prototype[name] = function (...args) {
+        if (args[0]) keyed.add(this)
+        return set.apply(this, args)
+      }
+    }
+  }
+  const protectedHere = (video) =>
+    webkit && !sources.has(video) && Boolean(keyed.has(video) || video.mediaKeys || video.webkitKeys)
   // The head as last placed. A head tracker never holds still: its noise (a few tenths of a degree, many times
   // a second) kept the 3D sound swapping its filters, a faint crackle all the time (-51 dB under a tone,
   // measured; none with the head still). So the head moves the sound only once it has turned a degree or moved
@@ -151,6 +169,7 @@ window.westplayCabSound = (media, say) => {
     // The sound is the page's own until there are speakers to play it (and a head to hear them), a cab's walls
     // to come through, a tone to give it, or its spectrum to measure.
     if (!video || (!audio && !(speakers && head) && !outside && flat() && !spectrumWanted)) return
+    if (protectedHere(video)) return
     if (!audio) {
       audio = { context: new AudioContext(), video: null, source: null, nodes: [], meters: null, muffle: null, wired: undefined }
     }
@@ -328,5 +347,10 @@ window.westplayCabSound = (media, say) => {
       } catch {}
     },
     level: cabLevel,
+    // Whether the element there is now plays as the page's own, being protected (WebKit's: above).
+    protected: () => {
+      const video = media()
+      return Boolean(video && protectedHere(video))
+    },
   }
 }

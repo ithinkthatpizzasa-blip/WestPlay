@@ -637,8 +637,9 @@ fn read_message(message: &str) -> Option<Message> {
         return Some(Message::Ready);
     }
     if let Some(said) = value.get("speakers").and_then(serde_json::Value::as_str) {
-        // Only the page's own two sayings, and short: nothing else of the page reaches the log.
+        // Only the page's own sayings, and short: nothing else of the page reaches the log.
         let known = said == "no media element found"
+            || said == "its own sound (protected)"
             || said.starts_with("through the speakers (")
             || said.starts_with("silent while playing (");
         return (known && said.len() <= 60).then(|| Message::Speakers(said.to_owned()));
@@ -792,6 +793,10 @@ mod tests {
         assert_eq!(
             read_message(r#"{"speakers":"through the speakers (video)"}"#),
             Some(Message::Speakers("through the speakers (video)".into()))
+        );
+        assert_eq!(
+            read_message(r#"{"speakers":"its own sound (protected)"}"#),
+            Some(Message::Speakers("its own sound (protected)".into()))
         );
         assert_eq!(
             read_message(r#"{"speakers":"silent while playing (2 elements, taken one paused)"}"#),

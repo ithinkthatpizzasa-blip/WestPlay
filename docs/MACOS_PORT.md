@@ -461,10 +461,13 @@ frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` fo
   Spotify is heard, but as the page's own sound: not from the cab's speakers around the head, not muffled with the
   camera outside, not through the tone (Settings › Sound), and no spectrum. The page's check says so in the host's
   log ("[spotify] speakers: silent while playing"). WebView2's Widevine allows it, which is why Windows has it.
-  To decide (owner): leave Spotify's sound as it is on macOS (and not take its element, so the log doesn't
-  cry silence), give it what the element's `volume` can (the fades, the camera outside as quieter), or take
-  WebKit's sound outside the page (a Core Audio process tap, macOS 14.4+) and do the speakers natively: much more.
-  Apple Music's would be the same (FairPlay); YouTube's and YouTube Music's aren't protected.
+  **Decided (owner, 2026-11-02): left plain.** In WestPlay's WebKit, `cab_sound.js` never takes a protected
+  element: one given its keys (`setMediaKeys`, or WebKit's older `webkitSetMediaKeys`; known as they're given, since
+  the keys are set some time after), or one that has them. Its sound stays the page's own, and Spotify's page
+  says so ("[spotify] speakers: its own sound (protected)") instead of the silence. Windows' WebView2 unchanged
+  (`ui/src/cabSound.test.ts`). Apple Music's is the same (FairPlay); YouTube's and YouTube Music's aren't
+  protected, and go through the speakers as on Windows. (Not chosen: fades by the element's `volume`; a Core
+  Audio process tap, macOS 14.4+, with the speakers done natively.)
 - The cabin's sign-in note says "Finish signing in on your PC": to say "Mac" (or neither) on macOS.
 
 ### The companion app on macOS (2026-11-02)
