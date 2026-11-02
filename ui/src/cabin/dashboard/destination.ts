@@ -1,4 +1,4 @@
-import { formatGameTime, formatTripDistance, formatTripTime } from '../../shared/format'
+import { formatGameTime, formatKilometres, formatTripDistance, formatTripTime } from '../../shared/format'
 import { cabClock, type JobInfo, type Telemetry } from '../../shared/host'
 import { labelLines } from '../maps/labels'
 import type { MapLabel } from '../maps/mapData'
@@ -48,6 +48,8 @@ export function destinationView(
   labels: readonly MapLabel[],
   text: Strings,
   clockShift: number,
+  /** The game's units are imperial: the distance in miles. */
+  miles = false,
 ): DestinationView | null {
   // Late or not by the player's own time, as the job's; shown by the cab's clock (a Convoy session's, in
   // the time zone where the truck is: `cabClock`).
@@ -65,7 +67,10 @@ export function destinationView(
         late: false,
       }
     }
-    const distance = routeLeft !== null ? formatTripDistance(routeLeft, text.decimal) : `${job.plannedDistanceKm} km`
+    const distance =
+      routeLeft !== null
+        ? formatTripDistance(routeLeft, text.decimal, miles)
+        : formatKilometres(job.plannedDistanceKm, miles)
     const late = job.deliveryTime > 0 && now > job.deliveryTime
     const deadline =
       job.deliveryTime > 0

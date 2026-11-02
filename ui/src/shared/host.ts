@@ -137,6 +137,8 @@ export type HostMessage =
   | { type: 'mapBlock'; hvt: boolean; language: string | null }
   /** Whether the player's profile has the game's time zones on (its clock the time where the truck is). */
   | { type: 'timeZones'; on: boolean }
+  /** Whether the player's profile has the game's units imperial (its `g_mph`): miles and mph, not km. */
+  | { type: 'units'; miles: boolean }
   /** The game's GPS route: its map nodes in order, `[x, z, forward x, forward z, distance left]` (metres;
    * the road's direction, either way along it; the distance left from the node to the destination, as the
    * game counts distances). `null` without a route. */

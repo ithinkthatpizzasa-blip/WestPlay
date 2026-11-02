@@ -4,7 +4,7 @@ import { formatTripDistance, formatTripTime } from '../../shared/format'
 import type { PlannedRoute, RouteAction, RouteAnswer } from '../../shared/host'
 import { useKeyboard } from '../keyboard/store'
 import { useLive } from '../state/store'
-import { type Strings, useText } from '../state/text'
+import { type Strings, useDistanceText, useText } from '../state/text'
 import { placesAhead } from './alongRoute'
 import { liveRouteProgress, showOfferedRoutes, showTraffic } from './liveMap'
 import { PlaceBadge } from './PlaceBadge'
@@ -308,6 +308,7 @@ function PlaceRow({
   onChoose(place: Destination): void
 }) {
   const text = useText()
+  const distance = useDistanceText()
   const kindName = text.destinations.kinds[place.kind]
   const name = title ?? nameOf(place, kindName)
   // What it is and where, without saying either twice ("Garage · Bari", "Taranto · City"), and what it adds.
@@ -324,9 +325,9 @@ function PlaceRow({
         {detail.length > 0 && <span className="destination-detail">{detail.join(' · ')}</span>}
       </span>
       {along !== undefined ? (
-        <span className="destination-distance">{formatTripDistance(along * MAP_SCALE, text.decimal)}</span>
+        <span className="destination-distance">{distance(along * MAP_SCALE)}</span>
       ) : (
-        from && <span className="destination-distance">{distanceText(place, from, text)}</span>
+        from && <span className="destination-distance">{distance(distanceTo(place, from) * MAP_SCALE)}</span>
       )}
     </button>
   )
@@ -347,6 +348,7 @@ function PlaceCard({
   onDone(message: string): void
 }) {
   const text = useText()
+  const distance = useDistanceText()
   const remember = useRecents((state) => state.remember)
   const { job, route } = useRouteState()
   const [asking, setAsking] = useState(false)
@@ -461,11 +463,13 @@ function PlaceCard({
         </div>
       </div>
       {along !== undefined ? (
-        <p className="destination-away">
-          {text.destinations.alongTheRoute(formatTripDistance(along * MAP_SCALE, text.decimal))}
-        </p>
+        <p className="destination-away">{text.destinations.alongTheRoute(distance(along * MAP_SCALE))}</p>
       ) : (
-        from && <p className="destination-away">{text.destinations.straightLine(distanceText(place, from, text))}</p>
+        from && (
+          <p className="destination-away">
+            {text.destinations.straightLine(distance(distanceTo(place, from) * MAP_SCALE))}
+          </p>
+        )
       )}
       {problem && (
         <p key={problem.id} className="destination-problem" role="status">
@@ -481,7 +485,7 @@ function PlaceCard({
               <button type="button" className="direction-pick" onClick={() => pick(index)}>
                 <span className="direction-time">{formatTripTime((route.seconds * MAP_SCALE) / 60, text)}</span>
                 <span className="direction-detail">
-                  {text.destinations.plans[route.plan]} · {formatTripDistance(route.length * MAP_SCALE, text.decimal)}
+                  {text.destinations.plans[route.plan]} · {distance(route.length * MAP_SCALE)}
                 </span>
               </button>
               {index === directions.picked && (
@@ -512,11 +516,6 @@ function PlaceCard({
   )
 }
 
-/** How far a place is in a straight line, in the units the game's GPS gives distances in. */
-function distanceText(place: Destination, from: [number, number], text: Strings): string {
-  return formatTripDistance(distanceTo(place, from) * MAP_SCALE, text.decimal)
-}
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /**
@@ -543,7 +542,7 @@ async function stopAdded(
   const minutes = (after.navigationTime - before.navigationTime) / 60
   if (metres <= 0) return plain
   return text.destinations.stopAdds(
-    formatTripDistance(metres, text.decimal),
+    formatTripDistance(metres, text.decimal, useLive.getState().miles),
     formatTripTime(Math.max(1, minutes), text),
   )
 }

@@ -1,5 +1,5 @@
 import { useShallow } from 'zustand/react/shallow'
-import { formatGameTime, formatTripDistance, formatTripTime, speedKmh } from '../../shared/format'
+import { formatGameTime, formatTripDistance, formatTripTime, wholeSpeed } from '../../shared/format'
 import { hvtMapMessage } from '../maps/blockedMap'
 import { GuidanceCard } from '../maps/GuidanceCard'
 import { DashboardMapControls, MapControls } from '../maps/MapControls'
@@ -22,8 +22,10 @@ import { cabClock } from '../../shared/host'
  * On a map WestPlay doesn't allow (by HVT), it says so instead, in the game's language.
  */
 export function MapView({ interactive = false }: { interactive?: boolean }) {
-  const speed = useLive((state) => (state.telemetry ? speedKmh(state.telemetry.speed) : 0))
-  const limit = useLive((state) => (state.telemetry ? speedKmh(state.telemetry.navigationSpeedLimit) : 0))
+  const speed = useLive((state) => (state.telemetry ? wholeSpeed(state.telemetry.speed, state.miles) : 0))
+  const limit = useLive((state) =>
+    state.telemetry ? wholeSpeed(state.telemetry.navigationSpeedLimit, state.miles) : 0,
+  )
   const data = useMapData()
   const hvtMap = useLive((state) => state.hvtMap)
   const text = useText()
@@ -101,7 +103,7 @@ function TripPill() {
       return [
         formatGameTime(Math.round(cabClock(telemetry, state.clockShift) + minutes)),
         stop ? `${formatTripTime(stop.minutes, text)} | ${total}` : total,
-        formatTripDistance(telemetry.navigationDistance, text.decimal),
+        formatTripDistance(telemetry.navigationDistance, text.decimal, state.miles),
       ]
     }),
   )
