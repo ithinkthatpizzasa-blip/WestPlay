@@ -59,6 +59,7 @@ pub fn host_alive() -> bool {
 
 /// Whether WestPlay is on the truck's screen: the app is running, the player hasn't switched it off, and the
 /// truck is one WestPlay supports.
+#[cfg_attr(not(windows), allow(dead_code))] // The keybinds', Windows' so far.
 pub fn screen_on() -> bool {
     host_alive()
         && crate::screens::on_supported_truck()

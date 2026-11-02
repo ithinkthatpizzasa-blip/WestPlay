@@ -1,4 +1,4 @@
-//! File logging to `Documents\WestPlay\logs`. The SCS log callback may only be used on the game's main
+//! File logging to `Documents\WestPlay\logs` (macOS: `~/Library/Application Support/WestPlay/logs`). The SCS log callback may only be used on the game's main
 //! thread during SDK callbacks, so everything else (render-thread hooks) goes through this file logger.
 //!
 //! The game's threads never touch the disk: a line logged is queued, and a thread of the plugin's own
@@ -14,7 +14,9 @@ use std::sync::{Mutex, OnceLock};
 use std::thread::JoinHandle;
 use std::time::Instant;
 
+#[cfg(windows)]
 use windows::Win32::System::Com::CoTaskMemFree;
+#[cfg(windows)]
 use windows::Win32::UI::Shell::{FOLDERID_Documents, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
 
 /// The log file while no writer thread runs (before [`init`]'s, and after [`shutdown`]).
@@ -28,6 +30,7 @@ type FileJob = (&'static str, Box<dyn FnOnce() -> String + Send>);
 
 enum Job {
     Line(String),
+    #[cfg_attr(not(windows), allow(dead_code))]
     File(FileJob),
 }
 
@@ -119,6 +122,7 @@ pub fn write(message: &str) {
 
 /// Writes the file `name` in the log folder with what `contents` makes, on the writer's thread (nothing
 /// without it: such files are diagnostics, not worth a game thread's time).
+#[cfg_attr(not(windows), allow(dead_code))] // The Direct3D textures' table so far.
 pub fn write_file_later(name: &'static str, contents: impl FnOnce() -> String + Send + 'static) {
     let _ = queue(Job::File((name, Box::new(contents))));
 }
@@ -136,6 +140,7 @@ pub fn log_dir() -> &'static PathBuf {
 }
 
 /// The player's Documents folder (Windows' own, wherever it's moved).
+#[cfg(windows)]
 pub fn documents_dir() -> PathBuf {
     // SAFETY: Windows hands back a CoTaskMem string, read before it's freed here.
     unsafe {
@@ -150,8 +155,19 @@ pub fn documents_dir() -> PathBuf {
     }
 }
 
+#[cfg(windows)]
 fn fallback_documents_dir() -> PathBuf {
     std::env::var_os("USERPROFILE").map(|p| PathBuf::from(p).join("Documents")).unwrap_or_else(std::env::temp_dir)
+}
+
+/// What stands for the Documents folder on macOS: `~/Library/Application Support`, as setup's (the game's own home is
+/// there too).
+#[cfg(target_os = "macos")]
+pub fn documents_dir() -> PathBuf {
+    std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| PathBuf::from(home).join("Library").join("Application Support"))
+        .unwrap_or_else(std::env::temp_dir)
 }
 
 #[cfg(test)]

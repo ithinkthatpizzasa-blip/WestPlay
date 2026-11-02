@@ -4589,6 +4589,7 @@ name = "westplay-plugin"
 version = "2.1.4"
 dependencies = [
  "minhook",
+ "objc2",
  "westplay-shared",
  "windows",
 ]

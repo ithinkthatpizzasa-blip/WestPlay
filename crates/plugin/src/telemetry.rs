@@ -23,6 +23,7 @@ use crate::{bridge, log};
 static PAUSED: AtomicBool = AtomicBool::new(true);
 
 /// Whether the game is paused (any thread).
+#[cfg_attr(not(windows), allow(dead_code))] // The input's, Windows' so far.
 pub fn paused() -> bool {
     PAUSED.load(Ordering::Acquire)
 }
@@ -220,7 +221,7 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
                 if let Some(bridge) = bridge::get() {
                     let [x, y, z] = *HEAD_DEFAULT.lock().unwrap_or_else(|e| e.into_inner());
                     let [cabin_x, cabin_y, cabin_z] = *CABIN.lock().unwrap_or_else(|e| e.into_inner());
-                    let camera = crate::camera::position();
+                    let camera = camera_position();
                     let [camera_x, camera_y, camera_z] = camera.unwrap_or_default();
                     let published = Telemetry {
                         head_x: snapshot.head_x + x,
@@ -237,16 +238,28 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
                     };
                     bridge.plugin.telemetry.write(&published);
                 }
+                #[cfg(windows)]
                 let (speed, paused) = (snapshot.speed, snapshot.paused);
                 drop(snapshot);
                 // Whether the player's keys type into WestPlay's field: they stop the moment the truck moves.
+                #[cfg(windows)]
                 crate::typing::update(speed, paused);
                 // The end of a frame is on the game's main thread, where its navigator may be changed.
+                #[cfg(windows)]
                 crate::navigation::serve();
             }
             _ => {}
         }
     }
+}
+
+/// Where the game's camera is, if known.
+fn camera_position() -> Option<[f32; 3]> {
+    #[cfg(windows)]
+    return crate::camera::position();
+    // The Mac game's camera isn't found yet (docs/MACOS_PORT.md).
+    #[cfg(not(windows))]
+    None
 }
 
 /// Publishes what the game (re)configures: the truck's identity and the player's job. An empty attribute set

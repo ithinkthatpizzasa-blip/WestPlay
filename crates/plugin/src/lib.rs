@@ -1,24 +1,40 @@
-//! WestPlay SCS SDK plugin (`westplay.dll`).
+//! WestPlay SCS SDK plugin (`westplay.dll`; `westplay.dylib` on macOS).
 //!
-//! Loaded by ETS2/ATS from `bin/win_x64/plugins`. The game calls `scs_telemetry_init` /
-//! `scs_telemetry_shutdown` on its main thread, possibly several times per process (`sdk reload`). Under
-//! TruckersMP its client loads it too, as one of its own plugins (`truckersmp_init`: `truckersmp`).
+//! Loaded by ETS2/ATS from `bin/win_x64/plugins` (macOS: `Euro Truck Simulator 2.app/Contents/MacOS/plugins`). The
+//! game calls `scs_telemetry_init` / `scs_telemetry_shutdown` on its main thread, possibly several times per process
+//! (`sdk reload`). Under TruckersMP its client loads it too, as one of its own plugins (`truckersmp_init`:
+//! `truckersmp`; Windows only, TruckersMP has no macOS client).
+//!
+//! On macOS the game draws with OpenGL (`gl`), and what finds the game's own code (`camera`, `mod_mount`,
+//! `navigation`) and its input (`input`, `keyboard`, `keybinds`, `typing`) is Windows' so far: docs/MACOS_PORT.md.
 
 mod bridge;
+#[cfg(windows)]
 mod camera;
+#[cfg(windows)]
 mod d3d;
+#[cfg(windows)]
 mod frame;
+#[cfg(target_os = "macos")]
+mod gl;
 mod hooks;
+#[cfg(windows)]
 mod input;
+#[cfg(windows)]
 mod keybinds;
+#[cfg(windows)]
 mod keyboard;
 mod log;
+#[cfg(windows)]
 mod mod_mount;
+#[cfg(windows)]
 mod navigation;
 mod screens;
 mod scs;
 mod telemetry;
+#[cfg(windows)]
 mod truckersmp;
+#[cfg(windows)]
 mod typing;
 
 use std::ffi::{CStr, CString};
@@ -70,18 +86,25 @@ unsafe fn init(version: u32, params: *const TelemetryInitParamsV100) -> i32 {
         );
 
         telemetry::register(params);
-        camera::locate();
-        // WestPlay's screen mod, before the game mounts the profile's mods.
-        mod_mount::mount(&game_id);
+        #[cfg(windows)]
+        {
+            camera::locate();
+            // WestPlay's screen mod, before the game mounts the profile's mods.
+            mod_mount::mount(&game_id);
 
-        // Screen interaction is optional: without it the screens still work, they just can't be used.
-        if let Err(e) = input::install() {
-            log!("input hook install failed: {e}");
+            // Screen interaction is optional: without it the screens still work, they just can't be used.
+            if let Err(e) = input::install() {
+                log!("input hook install failed: {e}");
+            }
+            if let Err(e) = keyboard::install() {
+                log!("keyboard hook install failed: {e}");
+            }
         }
-        if let Err(e) = keyboard::install() {
-            log!("keyboard hook install failed: {e}");
-        }
-        let status = match d3d::install().and_then(|()| hooks::enable_all()) {
+        #[cfg(windows)]
+        let graphics = d3d::install();
+        #[cfg(target_os = "macos")]
+        let graphics = gl::install();
+        let status = match graphics.and_then(|()| hooks::enable_all()) {
             Ok(()) => {
                 log!("hooks enabled");
                 "hooks installed".to_string()
@@ -119,7 +142,10 @@ unsafe fn shutdown() {
     // thread is given time to return below, before the plugin can be unloaded.
     unsafe {
         hooks::remove_all();
+        #[cfg(windows)]
         d3d::on_unload();
+        #[cfg(target_os = "macos")]
+        gl::on_unload();
     }
     log!("hooks removed");
     if let Some(bridge) = bridge::get() {
