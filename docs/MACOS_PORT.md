@@ -632,3 +632,53 @@ With a YouTube video playing in the cabin:
   frames (~30 a second here): about 1.2 ms of a ~30 ms frame.
 - But 60 frames a second never arrived: the Mac host captured and sent only 11–15 a second of the video (its log:
   "12 captured"), the game at 27 fps. The host's capture rate on macOS is its own question (Phase 2's), not the plugin's.
+
+### The game's route, read and changed (3d, 2026-11-02)
+
+**Reading the game's memory.** On Windows the app reads the game's route and weather from outside
+(`ReadProcessMemory`); on macOS another program may only as a debugger may. So the plugin reads for the app: the
+bridge (version 25) has a memory block carrying one range at a time, and a thread of the plugin's own copies it with
+`mach_vm_read_overwrite` on its own process (a range not mapped reads as an error, never as a fault in the game). The
+host's `route::Process` on macOS goes through it (64 KB a request); the plugin also says where the executable is
+loaded (`_dyld_get_image_header(0)`).
+
+**The route (host, `route.rs`).** Found as on Windows, by the getter registered beside `truck.navigation.distance`,
+in Apple's compiler's shape (`mov rdi, [global]; test rdi, rdi; …; add rdi, 0x3C38`): in 1.57.2.7s the core object's
+global at `+0x26DB3E0`, the navigator at `+0x3C38` of it. 1.57's navigator, read in the game (dumps of its memory, a
+route planned, then a stop added on the game's map):
+- the route id at `+0x10` and its holder at `+0x28`, as 1.61; the route 8 bytes sooner in the holder (`+0x70`);
+- the next node 0x18 bytes sooner (`+0x178` its route id, `+0x180` the pointer), as the mode (`+0x1B0`, 1.61 `+0x1C8`)
+  and the distance left (`+0x21C`, which the getter's method returns);
+- three lists, 0x20 apart, not four: `+0x1B8` (unchanged as a stop was added), `+0x1D8` the route's targets (its
+  stops in route order, a job's destination last: the one that grew), `+0x1F8` the places to avoid. No list in the
+  order stops were added: the Mac reads them from the route's targets, a job's destination left off.
+
+Seen in the cabin: the route on Maps (488 map nodes), its turns ("33 km, take the exit on the right"), a stop added on
+the game's map. The first time the turns were missing ("852 km, arrive at destination") the debug-built host was
+still reading the profile's junctions (ProMods): the release build had them at once (166 junctions, 18 turns).
+
+**Changing it (plugin, `navigation/macos.rs`).** 1.57's "set targets" (`+0x7146A0`) takes the navigator, the mode and
+three lists, and copies a list in unless it's the navigator's own: the Mac gives the new route list and hands its
+first and third lists back as they are. Map nodes come from the node table's lookup by uid (`+0x69EE30`: the `goto`
+command's second lookup; its first, `+0x69E180`, is the map items', and gave "the game couldn't route there"). The
+uid read back from the node is checked before it's used. The image search reads the Mach-O loaded in the game (a
+section name may fill its 16 bytes: 1.57's `__TEXT` has `__objc_classname`, which stopped the first search: "this
+version of the game isn't supported yet"). A test runs the whole search on the game's executable
+(`WESTPLAY_MAC_GAME`).
+
+Seen in the game (owner, ProMods profile, on a job): Maps → Bordeaux → Add stop: the game's trip went from 529 mi /
+11 h 1 min to 634 mi / 13 h 8 min through Bordeaux, the cabin 2 h 41 min to the stop. Go and End route (not on a job)
+and Follow aren't tried yet.
+
+**The map in the cabin.** Built by the host from the game's files (Phase 1's reader), for each profile: the
+owner's (ProMods' seven packs) in 470 s, 149 MB. The standalone host builds one only when `WESTPLAY_GAME` names the
+game's folder (the app's setup chooses it otherwise, not run on this Mac yet).
+
+**Not done in 3d yet:**
+- `mod_mount`: 1.57 mounts differently from the 1.6x builds Windows knows. A device is made from the file first
+  (`0x1019ccbe0`), then added to a pool (`0x1019c3090`: device, pool, path, priority; the mod pool is 2). Meanwhile the
+  screen mod stays switched on in the Mod Manager.
+- `camera`: no `subss` triple like Windows'; Apple's compiler writes and reads it otherwise. To be found by probing
+  the running game's memory (now possible, through the plugin).
+- The weather (`weather.rs`) still looks for Windows' code shape: not found on the Mac.
+- Units: the cabin writes km always (on Windows too); the owner's game is in miles.
