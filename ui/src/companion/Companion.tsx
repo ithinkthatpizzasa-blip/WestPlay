@@ -484,12 +484,20 @@ function useVersion(): string {
 function useShowWhenReady(ready: boolean) {
   useEffect(() => {
     if (!ready) return
+    const show = () => {
+      cancelAnimationFrame(frame)
+      clearTimeout(timer)
+      call('companion_ready').catch((error: unknown) => console.error('The window could not be shown', error))
+    }
     // Two frames: the first screen is laid out, then painted.
     let frame = requestAnimationFrame(() => {
-      frame = requestAnimationFrame(() => {
-        call('companion_ready').catch((error: unknown) => console.error('The window could not be shown', error))
-      })
+      frame = requestAnimationFrame(show)
     })
-    return () => cancelAnimationFrame(frame)
+    // WebKit (macOS) draws no frames for a window not shown yet: there it shows once laid out.
+    const timer = document.visibilityState === 'hidden' ? setTimeout(show, 200) : undefined
+    return () => {
+      cancelAnimationFrame(frame)
+      clearTimeout(timer)
+    }
   }, [ready])
 }

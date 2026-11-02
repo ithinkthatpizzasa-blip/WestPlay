@@ -114,7 +114,11 @@ mod tests {
         assert_eq!(file_in(maps, "/my%20map/map.json"), Some(maps.join("my map/map.json")));
         assert_eq!(file_in(maps, "/../settings.json"), None);
         assert_eq!(file_in(maps, "/europe/%2E%2E/%2E%2E/secret"), None);
+        // A drive is a way out on Windows; elsewhere `C:` is only a folder's name, in the maps folder.
+        #[cfg(windows)]
         assert_eq!(file_in(maps, "/C:/Windows/win.ini"), None);
+        #[cfg(not(windows))]
+        assert!(file_in(maps, "/C:/Windows/win.ini").is_some_and(|file| file.starts_with(maps)));
         assert_eq!(file_in(maps, "/"), None);
     }
 }

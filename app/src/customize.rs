@@ -157,8 +157,15 @@ fn forget(
     Ok(())
 }
 
-fn owner(window: &WebviewWindow) -> isize {
-    window.hwnd().map(|hwnd| hwnd.0 as isize).unwrap_or(0)
+/// The window a picker belongs to: Windows' handle; none on macOS, whose panels are the app's own.
+pub(crate) fn owner(window: &WebviewWindow) -> isize {
+    #[cfg(windows)]
+    return window.hwnd().map(|hwnd| hwnd.0 as isize).unwrap_or(0);
+    #[cfg(not(windows))]
+    {
+        let _ = window;
+        0
+    }
 }
 
 /// Runs `work` off the async runtime's threads (pickers, files, decoding images).

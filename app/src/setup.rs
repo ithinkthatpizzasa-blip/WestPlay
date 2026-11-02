@@ -174,7 +174,7 @@ pub fn prepare_maps_again(store: State<'_, SetupStore>) {
 /// there, `None` if they cancelled.
 #[tauri::command]
 pub async fn choose_game_folder(window: WebviewWindow, title: String) -> Result<Option<GameInfo>, String> {
-    let owner = window.hwnd().map(|hwnd| hwnd.0 as isize).unwrap_or(0);
+    let owner = crate::customize::owner(&window);
     blocking(move || {
         let Some(dir) = pick::folder(owner, &title) else { return Ok(None) };
         Game::recognise(&dir).map(|game| Some(GameInfo::from(&game))).ok_or_else(|| "notTheGame".to_owned())
@@ -690,6 +690,7 @@ pub fn leave_pc(keep: bool, app: AppHandle, store: State<SetupStore>) -> Result<
 /// Starts a step with no window at all (PowerShell, hidden): it waits for this WestPlay to end (its process
 /// gone, not a guess at the time), removes `paths` (folders or files), each tried again while a browser that
 /// has just closed still holds it, and starts `uninstaller` quietly, if there is one.
+#[cfg(windows)]
 fn after_exit(paths: &[PathBuf], uninstaller: Option<&Path>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -708,6 +709,7 @@ fn after_exit(paths: &[PathBuf], uninstaller: Option<&Path>) -> Result<(), Strin
 
 /// The step's script: wait for process `pid` to end (a minute at most), then remove each of `paths`, trying
 /// again for up to half a minute while it's in use.
+#[cfg(windows)]
 fn after_exit_script(pid: u32, paths: &[PathBuf]) -> String {
     let list: Vec<String> = paths.iter().map(|path| quoted(path)).collect();
     [
@@ -726,11 +728,13 @@ fn after_exit_script(pid: u32, paths: &[PathBuf]) -> String {
 }
 
 /// `path` as a PowerShell string: in single quotes, its own single quotes doubled.
+#[cfg(windows)]
 fn quoted(path: &Path) -> String {
     format!("'{}'", path.display().to_string().replace('\'', "''"))
 }
 
 /// `script` as PowerShell's `-EncodedCommand` takes it: its UTF-16 little-endian bytes, in base64.
+#[cfg(windows)]
 fn encoded_command(script: &str) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
@@ -746,10 +750,55 @@ fn encoded_command(script: &str) -> String {
     out
 }
 
+/// The same step on macOS: a shell script in a process group of its own, which outlives WestPlay. There's no
+/// uninstaller to start (the app is a bundle, moved to the Bin by the player).
+#[cfg(target_os = "macos")]
+fn after_exit(paths: &[PathBuf], _uninstaller: Option<&Path>) -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+    std::process::Command::new("/bin/sh")
+        .args(["-c", &after_exit_shell(std::process::id(), paths)])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .process_group(0)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("Couldn't remove WestPlay's data: {e}"))
+}
+
+/// The step's script, as PowerShell's on Windows: wait for process `pid` to end (a minute at most), then remove
+/// each of `paths`, trying again for up to half a minute while it's in use.
+#[cfg(target_os = "macos")]
+fn after_exit_shell(pid: u32, paths: &[PathBuf]) -> String {
+    let list: Vec<String> = paths.iter().map(|path| shell_quoted(path)).collect();
+    [
+        "i=0".to_owned(),
+        format!("while kill -0 {pid} 2>/dev/null && [ $i -lt 120 ]; do sleep 0.5; i=$((i + 1)); done"),
+        format!("for path in {}; do", list.join(" ")),
+        "  try=0".to_owned(),
+        "  while [ -e \"$path\" ] && [ $try -lt 60 ]; do".to_owned(),
+        "    rm -rf \"$path\"".to_owned(),
+        "    if [ -e \"$path\" ]; then sleep 0.5; fi".to_owned(),
+        "    try=$((try + 1))".to_owned(),
+        "  done".to_owned(),
+        "done".to_owned(),
+        String::new(),
+    ]
+    .join("\n")
+}
+
+/// `path` as a shell word: in single quotes, each of its own closed, escaped and opened again.
+#[cfg(target_os = "macos")]
+fn shell_quoted(path: &Path) -> String {
+    format!("'{}'", path.display().to_string().replace('\'', r"'\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
     #[test]
     fn hands_powershell_its_script_encoded_as_it_takes_it() {
         // "ab" in UTF-16 little-endian is 61 00 62 00.
@@ -757,6 +806,7 @@ mod tests {
         assert_eq!(encoded_command("a"), "YQA=");
     }
 
+    #[cfg(windows)]
     #[test]
     fn the_step_waits_for_westplay_then_removes_each_path_quoted() {
         let script = after_exit_script(4242, &[PathBuf::from(r"C:\Users\O'Brien\WestPlay")]);
@@ -766,6 +816,7 @@ mod tests {
     }
 
     /// The real step, hidden: it waits for a process still running (a short ping) to end, then removes a folder.
+    #[cfg(windows)]
     #[test]
     #[ignore = "starts PowerShell"]
     fn the_hidden_step_removes_a_folder_once_the_process_has_ended() {
@@ -791,6 +842,27 @@ mod tests {
         let _ = waiting.wait();
         assert!(status.success());
         assert!(started.elapsed() >= std::time::Duration::from_millis(1500), "it didn't wait for the process");
+        assert!(!folder.exists(), "the folder is still there");
+    }
+
+    /// The real step on macOS: it waits for a process still running (a short sleep) to end, then removes a
+    /// folder (a quote in its name).
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn the_shell_step_removes_a_folder_once_the_process_has_ended() {
+        let folder = std::env::temp_dir().join(format!("westplay-after-exit-O'Brien-{}", std::process::id()));
+        std::fs::create_dir_all(folder.join("inside")).unwrap();
+        std::fs::write(folder.join("inside").join("file.txt"), "x").unwrap();
+        let mut waiting = std::process::Command::new("sleep").arg("1.5").spawn().unwrap();
+        let pid = waiting.id();
+        // Reaped as it ends (a zombie still answers `kill -0`), as WestPlay ended is.
+        let reaped = std::thread::spawn(move || waiting.wait());
+        let started = std::time::Instant::now();
+        let script = after_exit_shell(pid, std::slice::from_ref(&folder));
+        let status = std::process::Command::new("/bin/sh").args(["-c", &script]).status().unwrap();
+        let _ = reaped.join();
+        assert!(status.success());
+        assert!(started.elapsed() >= std::time::Duration::from_millis(1400), "it didn't wait for the process");
         assert!(!folder.exists(), "the folder is still there");
     }
 }
