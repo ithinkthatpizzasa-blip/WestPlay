@@ -350,9 +350,11 @@ pub fn watch_installed_mods(store: &SetupStore) {
 fn look_at_mods(inner: &Inner, looked: &mut Option<ModsStamp>) {
     let record = inner.record();
     let Some(game) = record.game.as_deref().and_then(Game::recognise).filter(|_| record.finished) else { return };
-    let Some(ours) = places::westplay_documents().map(|dir| dir.join(game_mod::FILE_NAME)) else { return };
-    // Not set up yet (setup makes it), or the game has it open.
-    if !ours.is_file() || game::running() {
+    let Some(westplay) = places::westplay_documents() else { return };
+    let ours = game_mod::home(places::game_documents().as_deref(), &westplay).join(game_mod::FILE_NAME);
+    // Not set up yet (setup makes it), or the game has it open. On macOS, set up with the player's copy in the
+    // game's `mod` folder and that copy since taken out: WestPlay's own is made, for the plugin to mount.
+    if (!ours.is_file() && !cfg!(target_os = "macos")) || game::running() {
         return;
     }
     let mods = installed_mod_files(&game);
@@ -376,9 +378,7 @@ fn look_at_mods(inner: &Inner, looked: &mut Option<ModsStamp>) {
     let (mod_trucks, apart) = tablet::mod_trucks_and_marks(&mods);
     // The vehicles the tablet shows nothing in, as the installed mods have them now (the plugin reads them as the
     // truck changes).
-    if let Some(dir) = ours.parent()
-        && let Err(error) = tablet::write_apart(&apart, dir)
-    {
+    if let Err(error) = tablet::write_apart(&apart, &westplay) {
         log!("setup: the tablet's vehicles to keep it blank in not written: {error}");
     }
     let screen_mods = game_mod::mod_screen_mods(&mods);
@@ -479,19 +479,26 @@ pub async fn install_into_game(
     .await
 }
 
-/// The mod into WestPlay's own folder; then, from a game WestPlay 1.2 set up, its copy taken out of the game's
-/// `mod` folder and out of each profile's active mods (the game closed: the companion installs only then).
-/// Two copies would stop the game when a screen starts, and the plugin doesn't mount its own while the old one
-/// is there.
+/// The mod into WestPlay's own folder (on macOS, into the game's `mod` folder instead if the player keeps it
+/// there: `game_mod::home`); then, from a game WestPlay 1.2 set up, its copy taken out of the game's `mod` folder
+/// and out of each profile's active mods (the game closed: the companion installs only then). Two copies would
+/// stop the game when a screen starts, and the plugin doesn't mount its own while the old one is there. There's
+/// no WestPlay 1.2 on macOS: a copy in the `mod` folder there is the player's, and their profiles are theirs.
 fn install_mod(game: &Game) -> Result<(), String> {
     let (bytes, built, apart) = build_mod(game)?;
     if let Some(why) = &built.not_sharp {
         log!("setup: the 7\" Scania screen stays at the game's size: {why}");
     }
     let ours = places::westplay_documents().ok_or("noDocuments")?;
-    game_mod::install(&bytes, &ours).map_err(|e| format!("Couldn't write the mod: {e}"))?;
+    let documents = places::game_documents();
+    let home = game_mod::home(documents.as_deref(), &ours);
+    let written = game_mod::install(&bytes, &home).map_err(|e| format!("Couldn't write the mod: {e}"))?;
+    log!("setup: WestPlay's mod written to {}", written.display());
     tablet::write_apart(&apart, &ours).map_err(|e| format!("Couldn't write the mod: {e}"))?;
-    if let Some(documents) = places::game_documents() {
+    if cfg!(target_os = "macos") {
+        return Ok(());
+    }
+    if let Some(documents) = documents {
         westplay_setup::uninstall::remove_mod(&documents)
             .map_err(|e| format!("Couldn't take the old mod out of the game's mod folder: {e}"))?;
         let userdata = places::steam().map(|steam| steam.join("userdata"));
