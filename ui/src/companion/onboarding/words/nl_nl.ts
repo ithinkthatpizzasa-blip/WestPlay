@@ -192,6 +192,6 @@ export const words: Words = {
     declined:
       'Zonder toestemming kan de plug-in niet worden geïnstalleerd. Probeer het opnieuw en voer je wachtwoord in.',
     noDocuments: 'Je map Application Support is niet gevonden.',
-    keys: { leftAlt: 'Linker Option', rightCtrl: 'Rechter Control' },
+    keys: { leftAlt: 'Linker Option', rightCtrl: 'Rechter Control', rightAlt: 'Rechter Option' },
   },
 }

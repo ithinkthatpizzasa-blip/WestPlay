@@ -193,6 +193,6 @@ export const words: Words = {
       'Ваша игра је у заштићеној фасцикли. macOS ће једном тражити вашу лозинку, само за копирање додатка.',
     declined: 'Без ње додатак не може да се инсталира. Покушајте поново и унесите лозинку.',
     noDocuments: 'Фасцикла „Application Support“ није пронађена.',
-    keys: { leftAlt: 'Леви Option', rightCtrl: 'Десни Control' },
+    keys: { leftAlt: 'Леви Option', rightCtrl: 'Десни Control', rightAlt: 'Десни Option' },
   },
 }

@@ -67,16 +67,18 @@ function nameOf(key: KeyCode): Promise<string | null> {
  * player's keyboard ("Num 4", "F9", "Q"). */
 export function useKeyName(key: KeyCode, words: Words): string {
   const preset = presetOf(key)
+  // Right Alt has a name in the Mac's words only (its right Option); on Windows, Windows names it.
+  const named = preset ? words.controls.keys[preset] : undefined
   const [asked, setAsked] = useState<{ key: KeyCode; name: string | null } | null>(null)
   useEffect(() => {
-    if (preset) return
+    if (named) return
     let active = true
     nameOf(key).then((name) => active && setAsked({ key, name }))
     return () => {
       active = false
     }
-  }, [key, preset])
-  if (preset) return words.controls.keys[preset]
+  }, [key, named])
+  if (named) return named
   if (asked?.key !== key) return '…'
   // A key the system has no name for: its number, as Windows has it.
   return asked.name ?? `0x${key.toString(16).toUpperCase().padStart(2, '0')}`

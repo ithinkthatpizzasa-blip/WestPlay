@@ -190,6 +190,6 @@ export const words: Words = {
       'Zure jokoa karpeta babestu batean dago. macOS-ek behin eskatuko du zure pasahitza, plugina kopiatzeko bakarrik.',
     declined: 'Baimenik gabe ezin da plugina instalatu. Saiatu berriro eta idatzi zure pasahitza.',
     noDocuments: 'Ezin izan da Application Support karpeta aurkitu.',
-    keys: { leftAlt: 'Ezkerreko Option', rightCtrl: 'Eskuineko Control' },
+    keys: { leftAlt: 'Ezkerreko Option', rightCtrl: 'Eskuineko Control', rightAlt: 'Eskuineko Option' },
   },
 }

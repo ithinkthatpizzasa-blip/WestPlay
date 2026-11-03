@@ -191,6 +191,6 @@ export const words: Words = {
     needsAdministrator: 'Гра лежить у захищеній теці. macOS один раз запитає ваш пароль — лише щоб скопіювати плагін.',
     declined: 'Без нього плагін не встановити. Спробуйте ще раз і введіть пароль.',
     noDocuments: 'Не вдалося знайти теку «Application Support».',
-    keys: { leftAlt: 'Лівий Option', rightCtrl: 'Правий Control' },
+    keys: { leftAlt: 'Лівий Option', rightCtrl: 'Правий Control', rightAlt: 'Правий Option' },
   },
 }

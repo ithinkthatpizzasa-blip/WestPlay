@@ -192,6 +192,6 @@ export const words: Words = {
       'Seu jogo está em uma pasta protegida. O macOS vai pedir sua senha uma única vez, só para copiar o plugin.',
     declined: 'Sem ela, o plugin não pode ser instalado. Tente novamente e digite sua senha.',
     noDocuments: 'Sua pasta Application Support não foi encontrada.',
-    keys: { leftAlt: 'Option esquerdo', rightCtrl: 'Control direito' },
+    keys: { leftAlt: 'Option esquerdo', rightCtrl: 'Control direito', rightAlt: 'Option direito' },
   },
 }

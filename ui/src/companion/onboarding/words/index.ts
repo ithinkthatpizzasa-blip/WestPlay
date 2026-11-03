@@ -146,7 +146,8 @@ export interface Words {
   controls: {
     title: string
     sub: string
-    keys: Record<KeyPreset, string>
+    /** Right Alt's is the Mac's only (`mac.keys`). */
+    keys: Record<Exclude<KeyPreset, 'rightAlt'>, string> & { rightAlt?: string }
     /** The keys' own labels, as on the language's PC keyboards (a Mac's: [`onMac`]). */
     alt: string
     ctrl: string
@@ -200,8 +201,9 @@ export interface MacWords {
   declined: string
   /** `install.noDocuments` */
   noDocuments: string
-  /** `controls.keys`' keys (their keycaps are the Mac's symbols, ⌥ and ⌃, on every Mac's keyboard). */
-  keys: { leftAlt: string; rightCtrl: string }
+  /** `controls.keys`' keys (their keycaps are the Mac's symbols, ⌥ and ⌃, on every Mac's keyboard), and right
+   * Option, which the Mac offers in place of Right Control (`offeredKeys`). */
+  keys: { leftAlt: string; rightCtrl: string; rightAlt: string }
 }
 
 /** `words` as the Mac says them: [`MacWords`] in place of Windows'. */

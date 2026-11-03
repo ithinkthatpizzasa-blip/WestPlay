@@ -193,6 +193,6 @@ export const words: Words = {
       'Вашата игра е во заштитена папка. macOS еднаш ќе ја побара вашата лозинка, само за копирање на приклучокот.',
     declined: 'Без неа приклучокот не може да се инсталира. Обидете се повторно и внесете ја лозинката.',
     noDocuments: 'Папката „Application Support“ не беше пронајдена.',
-    keys: { leftAlt: 'Лев Option', rightCtrl: 'Десен Control' },
+    keys: { leftAlt: 'Лев Option', rightCtrl: 'Десен Control', rightAlt: 'Десен Option' },
   },
 }

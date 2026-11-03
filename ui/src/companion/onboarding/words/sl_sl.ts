@@ -193,6 +193,6 @@ export const words: Words = {
       'Tvoja igra je v zaščiteni mapi. macOS bo enkrat vprašal za tvoje geslo, samo za kopiranje vtičnika.',
     declined: 'Brez njega vtičnika ni mogoče namestiti. Poskusi znova in vnesi geslo.',
     noDocuments: 'Mape Application Support ni bilo mogoče najti.',
-    keys: { leftAlt: 'Levi Option', rightCtrl: 'Desni Control' },
+    keys: { leftAlt: 'Levi Option', rightCtrl: 'Desni Control', rightAlt: 'Desni Option' },
   },
 }

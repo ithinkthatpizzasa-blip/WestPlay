@@ -193,6 +193,6 @@ export const words: Words = {
       'Игра находится в защищённой папке. macOS один раз запросит ваш пароль — только чтобы скопировать плагин.',
     declined: 'Без него плагин не установить. Попробуйте снова и введите пароль.',
     noDocuments: 'Не удалось найти папку «Application Support».',
-    keys: { leftAlt: 'Левый Option', rightCtrl: 'Правый Control' },
+    keys: { leftAlt: 'Левый Option', rightCtrl: 'Правый Control', rightAlt: 'Правый Option' },
   },
 }

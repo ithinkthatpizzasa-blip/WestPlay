@@ -192,6 +192,6 @@ export const words: Words = {
       'Il gioco si trova in una cartella protetta. macOS ti chiederà la password una sola volta, solo per copiare il plugin.',
     declined: 'Senza di esso il plugin non può essere installato. Riprova e inserisci la password.',
     noDocuments: 'La cartella Application Support non è stata trovata.',
-    keys: { leftAlt: 'Opzione sinistro', rightCtrl: 'Control destro' },
+    keys: { leftAlt: 'Opzione sinistro', rightCtrl: 'Control destro', rightAlt: 'Opzione destro' },
   },
 }

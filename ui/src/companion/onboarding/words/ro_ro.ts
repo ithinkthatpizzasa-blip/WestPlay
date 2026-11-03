@@ -193,6 +193,6 @@ export const words: Words = {
       'Jocul tău este într-un dosar protejat. macOS îți va cere parola o singură dată, doar pentru a copia pluginul.',
     declined: 'Fără ea, pluginul nu poate fi instalat. Încearcă din nou și introdu parola.',
     noDocuments: 'Dosarul Application Support nu a fost găsit.',
-    keys: { leftAlt: 'Option stânga', rightCtrl: 'Control dreapta' },
+    keys: { leftAlt: 'Option stânga', rightCtrl: 'Control dreapta', rightAlt: 'Option dreapta' },
   },
 }

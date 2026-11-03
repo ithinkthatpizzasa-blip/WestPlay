@@ -191,6 +191,6 @@ export const words: Words = {
       'Your game is in a protected folder. macOS will ask for your password once, only to copy the plugin.',
     declined: 'The plugin can’t be installed without it. Try again and enter your password.',
     noDocuments: 'Your Application Support folder couldn’t be found.',
-    keys: { leftAlt: 'Left Option', rightCtrl: 'Right Control' },
+    keys: { leftAlt: 'Left Option', rightCtrl: 'Right Control', rightAlt: 'Right Option' },
   },
 }

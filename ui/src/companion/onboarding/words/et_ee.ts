@@ -191,6 +191,6 @@ export const words: Words = {
       'Sinu mäng asub kaitstud kaustas. macOS küsib sinu parooli ühe korra, ainult pistikprogrammi kopeerimiseks.',
     declined: 'Ilma selleta ei saa pistikprogrammi paigaldada. Proovi uuesti ja sisesta oma parool.',
     noDocuments: 'Kausta Application Support ei leitud.',
-    keys: { leftAlt: 'Vasak Option', rightCtrl: 'Parem Control' },
+    keys: { leftAlt: 'Vasak Option', rightCtrl: 'Parem Control', rightAlt: 'Parem Option' },
   },
 }

@@ -193,6 +193,6 @@ export const words: Words = {
       'Tava spēle atrodas aizsargātā mapē. macOS vienreiz pajautās tavu paroli, tikai lai nokopētu spraudni.',
     declined: 'Bez tās spraudni nevar instalēt. Mēģini vēlreiz un ievadi paroli.',
     noDocuments: 'Mape Application Support netika atrasta.',
-    keys: { leftAlt: 'Kreisais Option', rightCtrl: 'Labais Control' },
+    keys: { leftAlt: 'Kreisais Option', rightCtrl: 'Labais Control', rightAlt: 'Labais Option' },
   },
 }

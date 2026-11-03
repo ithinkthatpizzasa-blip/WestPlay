@@ -193,6 +193,6 @@ export const words: Words = {
     declined:
       'Χωρίς αυτήν, το πρόσθετο δεν μπορεί να εγκατασταθεί. Δοκίμασε ξανά και πληκτρολόγησε το συνθηματικό σου.',
     noDocuments: 'Ο φάκελος «Application Support» δεν βρέθηκε.',
-    keys: { leftAlt: 'Αριστερό Option', rightCtrl: 'Δεξί Control' },
+    keys: { leftAlt: 'Αριστερό Option', rightCtrl: 'Δεξί Control', rightAlt: 'Δεξί Option' },
   },
 }

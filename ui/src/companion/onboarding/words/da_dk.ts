@@ -190,6 +190,6 @@ export const words: Words = {
       'Dit spil ligger i en beskyttet mappe. macOS beder om din adgangskode én gang, kun for at kopiere pluginnet.',
     declined: 'Uden den kan pluginnet ikke installeres. Prøv igen, og skriv din adgangskode.',
     noDocuments: 'Mappen Application Support blev ikke fundet.',
-    keys: { leftAlt: 'Venstre Alternativ', rightCtrl: 'Højre Kontrol' },
+    keys: { leftAlt: 'Venstre Alternativ', rightCtrl: 'Højre Kontrol', rightAlt: 'Højre Alternativ' },
   },
 }

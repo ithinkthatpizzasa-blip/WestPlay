@@ -190,6 +190,6 @@ export const words: Words = {
       'Ditt spel ligger i en skyddad mapp. macOS frågar efter ditt lösenord en gång, bara för att kopiera pluginet.',
     declined: 'Utan den kan pluginet inte installeras. Försök igen och ange ditt lösenord.',
     noDocuments: 'Mappen Application Support hittades inte.',
-    keys: { leftAlt: 'Vänster Alternativ', rightCtrl: 'Höger Kontroll' },
+    keys: { leftAlt: 'Vänster Alternativ', rightCtrl: 'Höger Kontroll', rightAlt: 'Höger Alternativ' },
   },
 }
