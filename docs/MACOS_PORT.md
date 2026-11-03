@@ -741,4 +741,10 @@ are byte for byte as they were (only lines added to the words files).
   Right Control set before still works and is named, it just isn't offered. Only the Mac's words name right Option
   (`mac.keys.rightAlt`): on Windows 0xA5 is still named by Windows. Seen in the preview: chosen, it's "Right Option"
   everywhere ("Right Option + 1" in the keybinds).
+- **The mod kept in Mod Manager** (2026-11-03): the install step said "…nothing to turn on in Mod Manager", wrong
+  where the player keeps westplay.scs in the game's `mod` folder, switched on in the Mod Manager (the owner's Mac:
+  setup keeps that copy up to date and leaves the profiles alone). When the check says so (`GameCheck.modInModManager`),
+  the step says instead, in each language with the game's own name for its Mod Manager: "WestPlay adds a plugin to your
+  game and keeps its truck screens up to date in its mod, westplay.scs, which you have on in Mod Manager. Your game's
+  own files stay untouched, and uninstalling WestPlay removes it all." (`mac.inModManager`). Preview: `?modManager`.
 - The translations other than English are, as before, without a native speaker's review.
