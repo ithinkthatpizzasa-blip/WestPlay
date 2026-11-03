@@ -4,11 +4,13 @@ import type { Words } from './onboarding/words'
 import { KEY_PRESETS, type KeyCode, type KeyPreset } from './useSettings'
 
 /**
- * Keys as Windows numbers them (virtual-key codes, which the plugin checks in the game), from the companion's
- * own key and mouse events, and their names for the player.
+ * Keys as Windows numbers them (virtual-key codes, which the plugin checks in the game, the Mac's too: Option is
+ * Alt's, Control Ctrl's, Command the Windows keys'), from the companion's own key and mouse events, and their
+ * names for the player.
  */
 
-/** A side's own code for Shift, Ctrl, Alt and the Windows keys (the event's `keyCode` is the same for both). */
+/** A side's own code for Shift, Ctrl, Alt and the Windows keys (Shift, Control, Option and Command on the Mac;
+ * the event's `keyCode` is the same for both sides). */
 const SIDED: Record<string, KeyCode> = {
   ShiftLeft: 0xa0,
   ShiftRight: 0xa1,
@@ -20,7 +22,8 @@ const SIDED: Record<string, KeyCode> = {
   MetaRight: 0x5c,
 }
 
-/** The key pressed: its virtual-key code (in Windows' browser, a key event's `keyCode` is one); `null`: none. */
+/** The key pressed: its virtual-key code (a key event's `keyCode` is one, in WebView2 and in WebKit on the Mac);
+ * `null`: none. */
 export function keyOf(event: KeyboardEvent): KeyCode | null {
   const sided = SIDED[event.code]
   if (sided !== undefined) return sided
@@ -38,7 +41,7 @@ export function isModifier(key: KeyCode): boolean {
 }
 
 /** Keys that can't be bound: the mouse's left, right and middle buttons (the screen's), the Windows keys
- * (Windows' own), and Esc (it cancels choosing). */
+ * (Windows' own; Command on the Mac, its shortcuts'), and Esc (it cancels choosing). */
 export function bindable(key: KeyCode): boolean {
   return ![0x01, 0x02, 0x04, 0x5b, 0x5c, 0x1b].includes(key)
 }
@@ -48,7 +51,7 @@ export function presetOf(key: KeyCode): KeyPreset | null {
   return found ? (found[0] as KeyPreset) : null
 }
 
-/** Windows' names for keys, asked once each. */
+/** The system's names for keys (the app's `key_name`: Windows', or the Mac's), asked once each. */
 const names = new Map<KeyCode, Promise<string | null>>()
 
 function nameOf(key: KeyCode): Promise<string | null> {
@@ -60,7 +63,7 @@ function nameOf(key: KeyCode): Promise<string | null> {
   return name
 }
 
-/** A key's name for the player: the onboarding's for its keys (in their language), else Windows' for the
+/** A key's name for the player: the onboarding's for its keys (in their language), else the system's for the
  * player's keyboard ("Num 4", "F9", "Q"). */
 export function useKeyName(key: KeyCode, words: Words): string {
   const preset = presetOf(key)
@@ -75,6 +78,6 @@ export function useKeyName(key: KeyCode, words: Words): string {
   }, [key, preset])
   if (preset) return words.controls.keys[preset]
   if (asked?.key !== key) return '…'
-  // A key Windows has no name for: its number, as Windows has it.
+  // A key the system has no name for: its number, as Windows has it.
   return asked.name ?? `0x${key.toString(16).toUpperCase().padStart(2, '0')}`
 }

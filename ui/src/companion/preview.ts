@@ -1,6 +1,7 @@
 import type { GameCheck, GameInfo, InstallReport, SetupState } from './setup'
 import type { Customizations } from '../shared/customize'
 import type { Added } from './customize'
+import { SYSTEM } from './system'
 import type { Offer } from './update'
 import type { HostStatus, MapStatus } from './useHostStatus'
 import type { Settings } from './useSettings'
@@ -19,6 +20,7 @@ import type { Settings } from './useSettings'
  * - `?elevated`: the game run as administrator (WestPlay can't read its route, guidance or weather).
  * - `?updated` (or `?updated=admin`): WestPlay updated since it was set up: the new plugin goes into the game
  *   once it's closed (with `admin`, Windows' permission is asked for first).
+ * - `?system=mac|windows`: the Mac's words and places, or Windows' (system.ts; else the browser's own).
  *
  * Nothing here is ever in the app.
  */
@@ -26,7 +28,10 @@ const query = new URLSearchParams(location.search)
 const gameState = query.get('game') ?? 'live'
 
 const GAME: GameInfo = {
-  dir: 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Euro Truck Simulator 2',
+  dir:
+    SYSTEM === 'mac'
+      ? '/Users/Player/Library/Application Support/Steam/steamapps/common/Euro Truck Simulator 2'
+      : 'C:\\Program Files (x86)\\Steam\\steamapps\\common\\Euro Truck Simulator 2',
   foundBy: 'steam',
   version: '1.61.1.9',
   tested: true,
@@ -116,7 +121,7 @@ const ADAPTERS = [
 function status(): HostStatus {
   const live = gameState === 'live'
   return {
-    webviewVersion: '141.0.3537.71',
+    webviewVersion: SYSTEM === 'mac' ? 'WebKit (Safari 26.0)' : '141.0.3537.71',
     adapter: gameState === 'off' ? null : ADAPTERS[0].name,
     // The one chosen, or WestPlay's pick: the game's.
     cabAdapter: (ADAPTERS.find((adapter) => adapter.id === settings.graphics.gpu) ?? ADAPTERS[0]).name,
@@ -232,7 +237,7 @@ const CHECK: GameCheck = {
   otherApps: [],
 }
 
-/** Some keys' names as Windows gives them (the app asks it for every key's). */
+/** Some keys' names as Windows gives them (the app asks it for every key's); the Mac's, as the host's. */
 function previewKeyName(key: number): string | null {
   if ((key >= 0x30 && key <= 0x39) || (key >= 0x41 && key <= 0x5a)) return String.fromCharCode(key)
   if (key >= 0x70 && key <= 0x87) return `F${key - 0x6f}`
@@ -258,6 +263,17 @@ function previewKeyName(key: number): string | null {
     0xa4: 'Alt',
     0xa5: 'Right Alt',
   }
+  const mac: Record<number, string> = {
+    0x08: 'Delete',
+    0x0d: 'Return',
+    0x2e: 'Forward Delete',
+    0xa0: 'Left Shift',
+    0xa2: 'Left Control',
+    0xa3: 'Right Control',
+    0xa4: 'Left Option',
+    0xa5: 'Right Option',
+  }
+  if (SYSTEM === 'mac' && mac[key]) return mac[key]
   if (key >= 0x60 && key <= 0x69) return `Num ${key - 0x60}`
   return named[key] ?? null
 }
@@ -313,7 +329,11 @@ export function answer(command: string, args?: Record<string, unknown>): Promise
       window.open('https://kreosus.com/enes-less', '_blank', 'noopener')
       return later(undefined)
     case 'app_log_place':
-      return later('C:\\Users\\Player\\Documents\\WestPlay\\logs\\app.log')
+      return later(
+        SYSTEM === 'mac'
+          ? '/Users/Player/Library/Application Support/WestPlay/logs/app.log'
+          : 'C:\\Users\\Player\\Documents\\WestPlay\\logs\\app.log',
+      )
     case 'youtube_sign_out':
       setTimeout(() => {
         accounts.youtube = false

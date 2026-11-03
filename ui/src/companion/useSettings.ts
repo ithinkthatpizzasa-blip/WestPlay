@@ -36,10 +36,12 @@ export interface Settings {
 export type TruckStrip = 'auto' | 'off'
 
 /** Mirrors `westplay_host::settings::KeyCode`: a key of the keyboard or a button of the mouse, as Windows
- * numbers it (its virtual-key code: 0x05 the mouse's back button, 0x31 the 1 key, 0xA4 Left Alt). */
+ * numbers it (its virtual-key code: 0x05 the mouse's back button, 0x31 the 1 key, 0xA4 Left Alt), on the Mac
+ * too: its plugin takes Alt for Option, Ctrl for Control and the Windows keys for Command. */
 export type KeyCode = number
 
-/** The keys the onboarding offers to hold (its keycaps), by the names their words have. */
+/** The keys the onboarding offers to hold (its keycaps), by the names their words have (Windows'; the Mac's are
+ * its words' `mac`). */
 export type KeyPreset = 'leftAlt' | 'rightCtrl' | 'mouseBack' | 'mouseForward'
 
 export const KEY_PRESETS: Record<KeyPreset, KeyCode> = {
@@ -49,7 +51,7 @@ export const KEY_PRESETS: Record<KeyPreset, KeyCode> = {
   mouseForward: 0x06,
 }
 
-/** The key WestPlay starts with: Left Alt. */
+/** The key WestPlay starts with: Left Alt (left Option on the Mac). */
 export const DEFAULT_KEY = KEY_PRESETS.leftAlt
 
 /** Mirrors `westplay_host::settings::InteractionMode`. */
