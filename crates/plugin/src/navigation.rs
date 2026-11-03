@@ -80,6 +80,12 @@ static GAME: OnceLock<Option<Game>> = OnceLock::new();
 pub unsafe fn serve() {
     let Some(bridge) = bridge::get() else { return };
     let block = &bridge.route;
+    #[cfg(target_os = "macos")]
+    // SAFETY: on the game's main thread (`serve`'s contract), with pieces `locate` found and checked.
+    if let Some(game) = GAME.get_or_init(|| unsafe { locate() }) {
+        // SAFETY: as above.
+        unsafe { macos::watch(game) };
+    }
     let request = block.request.load(Ordering::Acquire);
     if request == block.answered.load(Ordering::Relaxed) {
         return;
