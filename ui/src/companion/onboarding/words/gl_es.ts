@@ -191,6 +191,8 @@ export const words: Words = {
       'O teu xogo está nun cartafol protexido. macOS pedirache o contrasinal unha soa vez, só para copiar o complemento.',
     declined: 'Sen el non se pode instalar o complemento. Téntao de novo e escribe o teu contrasinal.',
     noDocuments: 'Non se atopou o teu cartafol Application Support.',
-    keys: { leftAlt: 'Opción esquerda', rightCtrl: 'Control dereito' },
+    inModManager:
+      'WestPlay engade un complemento ao teu xogo e mantén ao día as súas pantallas para os camións no seu mod, westplay.scs, que tes activado no Xestor de mods. Os ficheiros do propio xogo non se tocan, e ao desinstalar WestPlay quítase todo.',
+    keys: { leftAlt: 'Opción esquerda', rightCtrl: 'Control dereito', rightAlt: 'Opción dereita' },
   },
 }

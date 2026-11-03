@@ -193,6 +193,8 @@ export const words: Words = {
       'Hra je v chránenom priečinku. macOS sa raz opýta na vaše heslo, len kvôli skopírovaniu pluginu.',
     declined: 'Bez neho sa plugin nedá nainštalovať. Skúste to znova a zadajte heslo.',
     noDocuments: 'Priečinok Application Support sa nenašiel.',
-    keys: { leftAlt: 'Ľavý Option', rightCtrl: 'Pravý Control' },
+    inModManager:
+      'WestPlay pridá do hry plugin a svoje obrazovky pre kamióny udržiava aktuálne vo svojom mode westplay.scs, ktorý máte zapnutý v Správcovi modifikácií. Súbory samotnej hry zostanú nedotknuté a odinštalovaním WestPlay sa všetko odstráni.',
+    keys: { leftAlt: 'Ľavý Option', rightCtrl: 'Pravý Control', rightAlt: 'Pravý Option' },
   },
 }

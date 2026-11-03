@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { HVT_MAP_MESSAGES } from '../../../cabin/maps/blockedMap'
+import { offeredKeys } from '../../system'
 import { count, languageOf, languages, onMac, type Plural, type Words, wordsFor } from '.'
 
 /** Every count's words in `words`. */
@@ -88,10 +89,28 @@ describe('the onboarding’s words on the Mac', () => {
     expect(install.needsAdministrator.text).toBe(mac.needsAdministrator)
     expect(install.declined.text).toBe(mac.declined)
     expect(install.noDocuments).toBe(mac.noDocuments)
+    // The install step's line when the mod is kept in Mod Manager names the mod.
+    expect(mac.inModManager, code).toContain('westplay.scs')
     expect(controls.keys).toEqual({ ...windows.controls.keys, ...mac.keys })
     expect([controls.alt, controls.ctrl]).toEqual(['⌥', '⌃'])
     // Each says it its own way, not Windows' words again.
     const windowsTexts = texts({ ...windows, mac: null }).map(([, text]) => text)
     for (const [path, text] of texts(mac)) expect(windowsTexts, `${code} mac.${path}`).not.toContain(text)
+  })
+})
+
+describe('the keys offered to hold', () => {
+  it('are right Option on the Mac where Windows has Right Ctrl, which most Macs don’t have', () => {
+    expect(offeredKeys('windows')).toEqual(['leftAlt', 'rightCtrl', 'mouseBack', 'mouseForward'])
+    expect(offeredKeys('mac')).toEqual(['leftAlt', 'rightAlt', 'mouseBack', 'mouseForward'])
+  })
+
+  it.each(languages())('%s names each on its system', (code) => {
+    const windows = wordsFor(code)
+    for (const key of offeredKeys('windows')) expect(windows.controls.keys[key], key).toBeTruthy()
+    // Right Alt is Windows' to name there (it isn't offered): as before.
+    expect(windows.controls.keys.rightAlt).toBeUndefined()
+    const mac = onMac(windows)
+    for (const key of offeredKeys('mac')) expect(mac.controls.keys[key], key).toBeTruthy()
   })
 })

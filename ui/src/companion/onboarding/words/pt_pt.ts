@@ -192,6 +192,8 @@ export const words: Words = {
       'O seu jogo está numa pasta protegida. O macOS vai pedir a sua palavra-passe uma única vez, só para copiar o plugin.',
     declined: 'Sem ela, o plugin não pode ser instalado. Tente novamente e introduza a sua palavra-passe.',
     noDocuments: 'A sua pasta Application Support não foi encontrada.',
-    keys: { leftAlt: 'Opção esquerda', rightCtrl: 'Controlo direito' },
+    inModManager:
+      'O WestPlay adiciona um plugin ao seu jogo e mantém os ecrãs do WestPlay para os camiões atualizados no mod dele, westplay.scs, que tem ativado no Gestor de mods. Os ficheiros do próprio jogo ficam intactos, e desinstalar o WestPlay remove tudo.',
+    keys: { leftAlt: 'Opção esquerda', rightCtrl: 'Controlo direito', rightAlt: 'Opção direita' },
   },
 }

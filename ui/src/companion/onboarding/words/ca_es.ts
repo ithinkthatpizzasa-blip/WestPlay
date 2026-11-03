@@ -192,6 +192,8 @@ export const words: Words = {
       'El teu joc és en una carpeta protegida. macOS et demanarà la contrasenya un sol cop, només per copiar el connector.',
     declined: 'Sense ell no es pot instal·lar el connector. Torna-ho a provar i escriu la contrasenya.',
     noDocuments: 'No s’ha trobat la carpeta Application Support.',
-    keys: { leftAlt: 'Opció esquerra', rightCtrl: 'Control dret' },
+    inModManager:
+      'WestPlay afegeix un connector al teu joc i manté al dia les seves pantalles per als camions al seu mod, westplay.scs, que tens activat a Gestionar mods. Els fitxers del joc mateix no es toquen, i en desinstal·lar WestPlay se suprimeix tot.',
+    keys: { leftAlt: 'Opció esquerra', rightCtrl: 'Control dret', rightAlt: 'Opció dreta' },
   },
 }

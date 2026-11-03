@@ -192,6 +192,8 @@ export const words: Words = {
       'A játékod védett mappában van. A macOS egyszer kéri a jelszavad, csak a bővítmény másolásához.',
     declined: 'Enélkül a bővítmény nem telepíthető. Próbáld újra, és add meg a jelszavad.',
     noDocuments: 'Az Application Support mappa nem található.',
-    keys: { leftAlt: 'Bal Option', rightCtrl: 'Jobb Control' },
+    inModManager:
+      'A WestPlay egy bővítményt ad a játékodhoz, és naprakészen tartja kamionképernyőit a saját modjában, a westplay.scs-ben, amelyet bekapcsoltál a Modkezelőben. A játék saját fájljai érintetlenek maradnak, és a WestPlay eltávolításakor minden törlődik.',
+    keys: { leftAlt: 'Bal Option', rightCtrl: 'Jobb Control', rightAlt: 'Jobb Option' },
   },
 }

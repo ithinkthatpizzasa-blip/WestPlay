@@ -190,6 +190,8 @@ export const words: Words = {
       'Zure jokoa karpeta babestu batean dago. macOS-ek behin eskatuko du zure pasahitza, plugina kopiatzeko bakarrik.',
     declined: 'Baimenik gabe ezin da plugina instalatu. Saiatu berriro eta idatzi zure pasahitza.',
     noDocuments: 'Ezin izan da Application Support karpeta aurkitu.',
-    keys: { leftAlt: 'Ezkerreko Option', rightCtrl: 'Eskuineko Control' },
+    inModManager:
+      'WestPlay-k plugin bat gehitzen dio zure jokoari, eta bere kamioi-pantailak eguneratuta mantentzen ditu bere modean, westplay.scs, Mod-kudeatzailean aktibatuta duzuna. Jokoaren beraren fitxategiak ez dira ukitzen, eta WestPlay desinstalatzean dena kentzen da.',
+    keys: { leftAlt: 'Ezkerreko Option', rightCtrl: 'Eskuineko Control', rightAlt: 'Eskuineko Option' },
   },
 }

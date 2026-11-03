@@ -274,7 +274,14 @@ export function Onboarding({
               <CheckGame game={game} check={check} checked={setCheck} next={next} back={back} />
             )}
             {step === 'install' && game && (
-              <Install game={game} report={installed} reported={setInstalled} next={next} back={back} />
+              <Install
+                game={game}
+                inModManager={check?.modInModManager ?? false}
+                report={installed}
+                reported={setInstalled}
+                next={next}
+                back={back}
+              />
             )}
             {step === 'map' && <MapStep status={status} next={next} back={back} />}
             {step === 'controls' && <Controls settings={settings} next={next} back={back} />}
@@ -542,12 +549,15 @@ function CheckGame({
 
 function Install({
   game,
+  inModManager,
   report,
   reported,
   next,
   back,
 }: {
   game: GameInfo
+  /** WestPlay's mod is kept in the game's Mod Manager (the check's `modInModManager`): the words say so. */
+  inModManager: boolean
   /** What installing did, if it was done (on this visit or an earlier one). */
   report: InstallReport | null
   reported(report: InstallReport): void
@@ -615,7 +625,7 @@ function Install({
     <Panel
       place="side"
       title={done ? w.titleDone : w.title}
-      sub={w.sub}
+      sub={inModManager ? words.mac.inModManager : w.sub}
       // While WestPlay boots again on the screen, the player waits for it: the next step opens an app there.
       back={installing || (done && !celebrated) ? undefined : back}
       action={

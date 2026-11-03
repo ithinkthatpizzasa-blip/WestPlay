@@ -20,6 +20,7 @@ import type { Settings } from './useSettings'
  * - `?elevated`: the game run as administrator (WestPlay can't read its route, guidance or weather).
  * - `?updated` (or `?updated=admin`): WestPlay updated since it was set up: the new plugin goes into the game
  *   once it's closed (with `admin`, Windows' permission is asked for first).
+ * - `?modManager`: WestPlay's mod kept in the game's Mod Manager (the owner's Mac), which setup keeps up to date.
  * - `?system=mac|windows`: the Mac's words and places, or Windows' (system.ts; else the browser's own).
  *
  * Nothing here is ever in the app.
@@ -235,7 +236,7 @@ const CHECK: GameCheck = {
   modProblem: null,
   plugin: 'current',
   otherApps: [],
-  modInModManager: false,
+  modInModManager: query.has('modManager'),
 }
 
 /** Some keys' names as Windows gives them (the app asks it for every key's); the Mac's, as the host's. */

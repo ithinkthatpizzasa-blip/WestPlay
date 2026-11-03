@@ -193,6 +193,8 @@ export const words: Words = {
       'Tvoja igra je v zaščiteni mapi. macOS bo enkrat vprašal za tvoje geslo, samo za kopiranje vtičnika.',
     declined: 'Brez njega vtičnika ni mogoče namestiti. Poskusi znova in vnesi geslo.',
     noDocuments: 'Mape Application Support ni bilo mogoče najti.',
-    keys: { leftAlt: 'Levi Option', rightCtrl: 'Desni Control' },
+    inModManager:
+      'WestPlay igri doda vtičnik in svoje zaslone za tovornjake sproti posodablja v svoji modifikaciji westplay.scs, ki jo imaš vklopljeno v Upravitelju modifikacij. Datoteke same igre ostanejo nedotaknjene, z odstranitvijo WestPlaya pa se odstrani vse.',
+    keys: { leftAlt: 'Levi Option', rightCtrl: 'Desni Control', rightAlt: 'Desni Option' },
   },
 }

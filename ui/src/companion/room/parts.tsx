@@ -3,7 +3,7 @@ import { hvtMapMessage } from '../../cabin/maps/blockedMap'
 import { count, fill, list, percent, type Words } from '../onboarding/words'
 import type { ProfileCheck } from '../setup'
 import type { MapStage, MapStatus } from '../useHostStatus'
-import { KEY_PRESETS, type KeyCode, type KeyPreset } from '../useSettings'
+import { KEY_PRESETS, type KeyCode, type KeyPreset, OFFERED_KEYS } from '../useSettings'
 import { headline, MAP_STAGES, n, RoomText, useWords, WordsContext } from './room'
 import { useScreen } from './screen'
 
@@ -259,6 +259,7 @@ export function MapProgress({ shown, stage, finished }: { shown: number; stage: 
 const KEYS: { value: KeyPreset; cap: (words: Words) => ReactNode }[] = [
   { value: 'leftAlt', cap: (words) => <span className="ob-cap">{words.controls.alt}</span> },
   { value: 'rightCtrl', cap: (words) => <span className="ob-cap">{words.controls.ctrl}</span> },
+  { value: 'rightAlt', cap: (words) => <span className="ob-cap">{words.controls.alt}</span> },
   { value: 'mouseBack', cap: () => <Mouse side="back" /> },
   { value: 'mouseForward', cap: () => <Mouse side="forward" /> },
 ]
@@ -328,7 +329,7 @@ export function KeyChooser({
   const words = useWords()
   return (
     <div className="ob-keys ob-in" style={n(place)}>
-      {KEYS.map((key) => (
+      {KEYS.filter((key) => OFFERED_KEYS.includes(key.value)).map((key) => (
         <button
           type="button"
           key={key.value}

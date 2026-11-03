@@ -194,6 +194,8 @@ export const words: Words = {
       'Gra jest w chronionym folderze. macOS zapyta o twoje hasło jeden raz, tylko po to, by skopiować wtyczkę.',
     declined: 'Bez niej nie można zainstalować wtyczki. Spróbuj ponownie i wpisz hasło.',
     noDocuments: 'Nie znaleziono twojego folderu Application Support.',
-    keys: { leftAlt: 'Lewy Option', rightCtrl: 'Prawy Control' },
+    inModManager:
+      'WestPlay dodaje do gry wtyczkę i aktualizuje swoje ekrany dla ciężarówek w swoim modzie westplay.scs, który masz włączony w Menedżerze modyfikacji. Pliki samej gry pozostają nietknięte, a odinstalowanie WestPlay usuwa wszystko.',
+    keys: { leftAlt: 'Lewy Option', rightCtrl: 'Prawy Control', rightAlt: 'Prawy Option' },
   },
 }

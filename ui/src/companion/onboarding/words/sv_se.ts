@@ -190,6 +190,8 @@ export const words: Words = {
       'Ditt spel ligger i en skyddad mapp. macOS frågar efter ditt lösenord en gång, bara för att kopiera pluginet.',
     declined: 'Utan den kan pluginet inte installeras. Försök igen och ange ditt lösenord.',
     noDocuments: 'Mappen Application Support hittades inte.',
-    keys: { leftAlt: 'Vänster Alternativ', rightCtrl: 'Höger Kontroll' },
+    inModManager:
+      'WestPlay lägger till ett plugin i ditt spel och håller sina lastbilsskärmar uppdaterade i sin mod, westplay.scs, som du har på i Mod-hanteraren. Spelets egna filer lämnas orörda, och när du avinstallerar WestPlay tas allt bort.',
+    keys: { leftAlt: 'Vänster Alternativ', rightCtrl: 'Höger Kontroll', rightAlt: 'Höger Alternativ' },
   },
 }

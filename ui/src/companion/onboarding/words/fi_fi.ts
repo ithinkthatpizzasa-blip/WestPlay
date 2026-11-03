@@ -191,6 +191,8 @@ export const words: Words = {
       'Pelisi on suojatussa kansiossa. macOS kysyy salasanaasi kerran, vain laajennuksen kopioimiseen.',
     declined: 'Ilman sitä laajennusta ei voi asentaa. Yritä uudelleen ja anna salasanasi.',
     noDocuments: 'Application Support -kansiota ei löytynyt.',
-    keys: { leftAlt: 'Vasen Optio', rightCtrl: 'Oikea Control' },
+    inModManager:
+      'WestPlay lisää peliisi laajennuksen ja pitää rekkanäyttönsä ajan tasalla modissaan westplay.scs, jonka olet ottanut käyttöön Modien hallinnassa. Pelin omiin tiedostoihin ei kosketa, ja kun poistat WestPlayn, kaikki poistetaan.',
+    keys: { leftAlt: 'Vasen Optio', rightCtrl: 'Oikea Control', rightAlt: 'Oikea Optio' },
   },
 }

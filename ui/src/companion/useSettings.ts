@@ -1,5 +1,6 @@
 import type { IconStyle } from '../shared/customize'
 import { call, on } from './bridge'
+import { offeredKeys, SYSTEM } from './system'
 import { useCallback, useEffect, useState } from 'react'
 
 /** The player's settings. Mirrors `westplay_host::settings::Settings`; the app owns and saves them. */
@@ -41,15 +42,19 @@ export type TruckStrip = 'auto' | 'off'
 export type KeyCode = number
 
 /** The keys the onboarding offers to hold (its keycaps), by the names their words have (Windows'; the Mac's are
- * its words' `mac`). */
-export type KeyPreset = 'leftAlt' | 'rightCtrl' | 'mouseBack' | 'mouseForward'
+ * its words' `mac`). Right Alt is the Mac's only: right Option. */
+export type KeyPreset = 'leftAlt' | 'rightCtrl' | 'rightAlt' | 'mouseBack' | 'mouseForward'
 
 export const KEY_PRESETS: Record<KeyPreset, KeyCode> = {
   leftAlt: 0xa4,
   rightCtrl: 0xa3,
+  rightAlt: 0xa5,
   mouseBack: 0x05,
   mouseForward: 0x06,
 }
+
+/** The keys offered on this system. */
+export const OFFERED_KEYS = offeredKeys(SYSTEM)
 
 /** The key WestPlay starts with: Left Alt (left Option on the Mac). */
 export const DEFAULT_KEY = KEY_PRESETS.leftAlt
