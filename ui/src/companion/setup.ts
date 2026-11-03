@@ -44,6 +44,9 @@ export interface GameCheck {
   plugin: 'missing' | 'current' | 'different'
   /** Other CarPlay apps installed in the game, which take the trucks' screens: to be removed. */
   otherApps: 'ymnOne'[]
+  /** WestPlay's mod is kept in the game's `mod` folder, switched on in its Mod Manager (on the Mac, where the player
+   * keeps it there), rather than brought in by the plugin. */
+  modInModManager: boolean
 }
 
 export interface TruckCheck {

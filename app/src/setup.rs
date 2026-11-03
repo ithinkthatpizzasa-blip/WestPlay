@@ -203,6 +203,9 @@ pub struct GameCheck {
     plugin: &'static str,
     /// Other CarPlay apps installed in the game, which take the trucks' screens (`ymnOne`): to be removed.
     other_apps: Vec<&'static str>,
+    /// WestPlay's mod is kept in the game's `mod` folder, switched on in its Mod Manager (on macOS, where the player
+    /// keeps it there: `game_mod::home`), rather than brought in by the plugin.
+    mod_in_mod_manager: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -296,9 +299,16 @@ pub async fn check_game(dir: PathBuf, store: State<'_, SetupStore>) -> Result<Ga
             mod_problem,
             plugin,
             other_apps: plugin::other_apps(&game),
+            mod_in_mod_manager: mod_in_mod_manager(),
         })
     })
     .await
+}
+
+/// Whether WestPlay's mod is kept in the game's `mod` folder (`game_mod::home`), not WestPlay's own.
+fn mod_in_mod_manager() -> bool {
+    let documents = places::game_documents();
+    places::westplay_documents().is_some_and(|ours| game_mod::home(documents.as_deref(), &ours) != ours)
 }
 
 /// The mod built for `game` and its installed mods, and the marks of the vehicles its tablet shows nothing in

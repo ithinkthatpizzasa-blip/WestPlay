@@ -235,6 +235,7 @@ const CHECK: GameCheck = {
   modProblem: null,
   plugin: 'current',
   otherApps: [],
+  modInModManager: false,
 }
 
 /** Some keys' names as Windows gives them (the app asks it for every key's); the Mac's, as the host's. */
