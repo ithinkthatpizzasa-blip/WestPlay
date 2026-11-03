@@ -185,4 +185,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Installer avec le mot de passe',
+    permission: 'macOS demandera votre mot de passe',
+    needsAdministrator:
+      'Votre jeu se trouve dans un dossier protégé. macOS demandera votre mot de passe une seule fois, uniquement pour copier le plug-in.',
+    declined: 'Le plug-in ne peut pas être installé sans elle. Réessayez et saisissez votre mot de passe.',
+    noDocuments: 'Votre dossier Application Support est introuvable.',
+    keys: { leftAlt: 'Option gauche', rightCtrl: 'Contrôle droite' },
+  },
 }

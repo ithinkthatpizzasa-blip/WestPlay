@@ -179,4 +179,12 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: '輸入密碼以安裝',
+    permission: 'macOS 會要求輸入密碼',
+    needsAdministrator: '你的遊戲位於受保護的資料夾中。macOS 會要求輸入一次密碼，僅用於複製外掛程式。',
+    declined: '沒有權限就無法安裝外掛程式。請重試並輸入密碼。',
+    noDocuments: '找不到你的「Application Support」資料夾。',
+    keys: { leftAlt: '左 Option', rightCtrl: '右 Control' },
+  },
 }

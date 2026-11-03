@@ -185,4 +185,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instal·la amb contrasenya',
+    permission: 'macOS et demanarà la contrasenya',
+    needsAdministrator:
+      'El teu joc és en una carpeta protegida. macOS et demanarà la contrasenya un sol cop, només per copiar el connector.',
+    declined: 'Sense ell no es pot instal·lar el connector. Torna-ho a provar i escriu la contrasenya.',
+    noDocuments: 'No s’ha trobat la carpeta Application Support.',
+    keys: { leftAlt: 'Opció esquerra', rightCtrl: 'Control dret' },
+  },
 }

@@ -182,4 +182,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Cài đặt bằng mật khẩu',
+    permission: 'macOS sẽ hỏi mật khẩu của bạn',
+    needsAdministrator:
+      'Trò chơi của bạn nằm trong thư mục được bảo vệ. macOS sẽ hỏi mật khẩu của bạn một lần, chỉ để sao chép plugin.',
+    declined: 'Không có quyền thì không cài được plugin. Hãy thử lại và nhập mật khẩu.',
+    noDocuments: 'Không tìm thấy thư mục Application Support của bạn.',
+    keys: { leftAlt: 'Option trái', rightCtrl: 'Control phải' },
+  },
 }

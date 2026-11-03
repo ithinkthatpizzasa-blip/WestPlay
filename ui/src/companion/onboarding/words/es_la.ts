@@ -52,4 +52,9 @@ export const words: Words = {
       mouseForward: 'Botón Adelante del mouse',
     },
   },
+  mac: {
+    ...spain.mac,
+    declined: 'Sin él no se puede instalar el plugin. Vuelve a intentarlo e ingresa tu contraseña.',
+    noDocuments: 'No se encontró tu carpeta Application Support.',
+  },
 }

@@ -15,4 +15,9 @@ export const words: CompanionWords = {
     steps: { ...france.uninstall.steps, plugin: 'Suppression du plugiciel' },
   },
   about: { ...france.about, log: 'Journal du plugiciel' },
+  mac: {
+    ...france.mac,
+    finishUpdate:
+      'Le plugiciel du nouveau WestPlay va dans votre jeu. macOS demande votre mot de passe, comme lors de l’installation.',
+  },
 }

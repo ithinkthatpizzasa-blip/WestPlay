@@ -184,4 +184,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Parolayla kur',
+    permission: 'macOS parolanı soracak',
+    needsAdministrator:
+      'Oyunun korumalı bir klasörde. macOS, yalnızca eklentiyi kopyalamak için bir kez parolanı soracak.',
+    declined: 'Eklenti izin olmadan kurulamaz. Tekrar dene ve parolanı gir.',
+    noDocuments: 'Application Support klasörün bulunamadı.',
+    keys: { leftAlt: 'Sol Option', rightCtrl: 'Sağ Control' },
+  },
 }

@@ -184,4 +184,12 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Инсталирай с парола',
+    permission: 'macOS ще поиска паролата ви',
+    needsAdministrator: 'Играта е в защитена папка. macOS ще поиска паролата ви веднъж, само за да копира плъгина.',
+    declined: 'Без него плъгинът не може да бъде инсталиран. Опитайте отново и въведете паролата си.',
+    noDocuments: 'Папката „Application Support“ не беше открита.',
+    keys: { leftAlt: 'Ляв Option', rightCtrl: 'Десен Control' },
+  },
 }

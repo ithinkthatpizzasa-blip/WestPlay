@@ -311,4 +311,12 @@ export const words: CompanionWords = {
     button: 'Stöd på Kreosus',
     note: 'Öppnar Kreosus i din webbläsare.',
   },
+  mac: {
+    elevated: {
+      title: 'Spelet körs som en annan användare',
+      text: 'Då ser WestPlay inte spelets rutt, vägledning eller väder. Starta spelet som vanligt, som dig själv.',
+    },
+    uninstall: 'Avinstallera med lösenord',
+    finishUpdate: 'Nya WestPlays plugin läggs i ditt spel. macOS frågar efter ditt lösenord, som vid installationen.',
+  },
 }

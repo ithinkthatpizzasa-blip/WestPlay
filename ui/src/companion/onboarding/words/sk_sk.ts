@@ -186,4 +186,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Inštalovať s heslom',
+    permission: 'macOS sa opýta na heslo',
+    needsAdministrator:
+      'Hra je v chránenom priečinku. macOS sa raz opýta na vaše heslo, len kvôli skopírovaniu pluginu.',
+    declined: 'Bez neho sa plugin nedá nainštalovať. Skúste to znova a zadajte heslo.',
+    noDocuments: 'Priečinok Application Support sa nenašiel.',
+    keys: { leftAlt: 'Ľavý Option', rightCtrl: 'Pravý Control' },
+  },
 }

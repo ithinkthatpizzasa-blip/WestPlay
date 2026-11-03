@@ -184,4 +184,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Asenna salasanalla',
+    permission: 'macOS kysyy salasanaasi',
+    needsAdministrator:
+      'Pelisi on suojatussa kansiossa. macOS kysyy salasanaasi kerran, vain laajennuksen kopioimiseen.',
+    declined: 'Ilman sitä laajennusta ei voi asentaa. Yritä uudelleen ja anna salasanasi.',
+    noDocuments: 'Application Support -kansiota ei löytynyt.',
+    keys: { leftAlt: 'Vasen Optio', rightCtrl: 'Oikea Control' },
+  },
 }

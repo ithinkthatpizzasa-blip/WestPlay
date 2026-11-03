@@ -183,4 +183,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Installer med adgangskode',
+    permission: 'macOS beder om din adgangskode',
+    needsAdministrator:
+      'Dit spil ligger i en beskyttet mappe. macOS beder om din adgangskode én gang, kun for at kopiere pluginnet.',
+    declined: 'Uden den kan pluginnet ikke installeres. Prøv igen, og skriv din adgangskode.',
+    noDocuments: 'Mappen Application Support blev ikke fundet.',
+    keys: { leftAlt: 'Venstre Alternativ', rightCtrl: 'Højre Kontrol' },
+  },
 }

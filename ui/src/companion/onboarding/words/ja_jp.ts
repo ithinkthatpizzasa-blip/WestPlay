@@ -182,4 +182,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'パスワードを入力してインストール',
+    permission: 'macOS がパスワードを求めます',
+    needsAdministrator:
+      'ゲームは保護されたフォルダにあります。プラグインをコピーするためだけに、macOS が一度だけパスワードを求めます。',
+    declined: '許可がないとプラグインをインストールできません。もう一度試して、パスワードを入力してください。',
+    noDocuments: 'Application Support フォルダが見つかりませんでした。',
+    keys: { leftAlt: '左 Option', rightCtrl: '右 Control' },
+  },
 }

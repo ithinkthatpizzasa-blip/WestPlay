@@ -186,4 +186,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'დაყენება პაროლით',
+    permission: 'macOS მოითხოვს თქვენს პაროლს',
+    needsAdministrator:
+      'თქვენი თამაში დაცულ საქაღალდეშია. macOS ერთხელ მოითხოვს თქვენს პაროლს, მხოლოდ მოდულის დასაკოპირებლად.',
+    declined: 'მის გარეშე მოდულის დაყენება შეუძლებელია. სცადეთ თავიდან და შეიყვანეთ პაროლი.',
+    noDocuments: '„Application Support“ საქაღალდე ვერ მოიძებნა.',
+    keys: { leftAlt: 'მარცხენა Option', rightCtrl: 'მარჯვენა Control' },
+  },
 }

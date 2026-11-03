@@ -185,4 +185,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Mit Passwort installieren',
+    permission: 'macOS fragt nach deinem Passwort',
+    needsAdministrator:
+      'Dein Spiel liegt in einem geschützten Ordner. macOS fragt einmal nach deinem Passwort, nur um das Plug-in zu kopieren.',
+    declined: 'Ohne sie kann das Plug-in nicht installiert werden. Versuche es erneut und gib dein Passwort ein.',
+    noDocuments: 'Dein Ordner „Application Support“ wurde nicht gefunden.',
+    keys: { leftAlt: 'Linke Wahltaste', rightCtrl: 'Rechte Control-Taste' },
+  },
 }

@@ -184,4 +184,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instalar con contrasinal',
+    permission: 'macOS pedirache o contrasinal',
+    needsAdministrator:
+      'O teu xogo está nun cartafol protexido. macOS pedirache o contrasinal unha soa vez, só para copiar o complemento.',
+    declined: 'Sen el non se pode instalar o complemento. Téntao de novo e escribe o teu contrasinal.',
+    noDocuments: 'Non se atopou o teu cartafol Application Support.',
+    keys: { leftAlt: 'Opción esquerda', rightCtrl: 'Control dereito' },
+  },
 }

@@ -312,4 +312,12 @@ export const words: CompanionWords = {
     button: 'Támogatás a Kreosuson',
     note: 'Megnyitja a Kreosust a böngésződben.',
   },
+  mac: {
+    elevated: {
+      title: 'A játék másik felhasználóként fut',
+      text: 'Így a WestPlay nem látja az útvonalát, a navigációt és az időjárást. Indítsd a játékot a szokásos módon, a saját felhasználóddal.',
+    },
+    uninstall: 'Eltávolítás jelszóval',
+    finishUpdate: 'Az új WestPlay bővítménye a játékodba kerül. A macOS kéri a jelszavad, mint a telepítéskor.',
+  },
 }
