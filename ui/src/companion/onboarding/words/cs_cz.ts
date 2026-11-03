@@ -192,6 +192,8 @@ export const words: Words = {
     needsAdministrator: 'Hra je v chráněné složce. macOS se jednou zeptá na vaše heslo, jen kvůli zkopírování pluginu.',
     declined: 'Bez něj nejde plugin nainstalovat. Zkuste to znovu a zadejte heslo.',
     noDocuments: 'Složka Application Support nebyla nalezena.',
+    inModManager:
+      'WestPlay do hry přidá plugin a své obrazovky pro kamiony udržuje aktuální ve svém modu westplay.scs, který máte zapnutý ve Správci modifikací. Soubory samotné hry zůstanou nedotčené a odinstalováním WestPlay se vše odstraní.',
     keys: { leftAlt: 'Levý Option', rightCtrl: 'Pravý Control', rightAlt: 'Pravý Option' },
   },
 }

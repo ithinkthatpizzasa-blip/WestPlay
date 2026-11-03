@@ -191,6 +191,8 @@ export const words: Words = {
       'Sinu mäng asub kaitstud kaustas. macOS küsib sinu parooli ühe korra, ainult pistikprogrammi kopeerimiseks.',
     declined: 'Ilma selleta ei saa pistikprogrammi paigaldada. Proovi uuesti ja sisesta oma parool.',
     noDocuments: 'Kausta Application Support ei leitud.',
+    inModManager:
+      'WestPlay lisab mängule pistikprogrammi ja hoiab oma veokiekraanid ajakohasena oma modis westplay.scs, mille oled Moodihalduris sisse lülitanud. Mängu enda failid jäävad puutumata ja WestPlay eemaldamisel eemaldatakse kõik.',
     keys: { leftAlt: 'Vasak Option', rightCtrl: 'Parem Control', rightAlt: 'Parem Option' },
   },
 }

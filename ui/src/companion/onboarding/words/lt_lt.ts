@@ -192,6 +192,8 @@ export const words: Words = {
       'Tavo žaidimas yra apsaugotame aplanke. macOS vieną kartą paprašys tavo slaptažodžio, tik papildiniui nukopijuoti.',
     declined: 'Be jo papildinio įdiegti negalima. Bandyk dar kartą ir įvesk slaptažodį.',
     noDocuments: 'Nepavyko rasti aplanko „Application Support“.',
+    inModManager:
+      'WestPlay prideda į žaidimą papildinį ir atnaujina savo sunkvežimių ekranus savo mode westplay.scs, kurį esi įjungęs „Modų valdyme“. Paties žaidimo failai lieka nepaliesti, o pašalinus WestPlay viskas pašalinama.',
     keys: { leftAlt: 'Kairysis Option', rightCtrl: 'Dešinysis Control', rightAlt: 'Dešinysis Option' },
   },
 }

@@ -192,6 +192,8 @@ export const words: Words = {
     declined:
       'Zonder toestemming kan de plug-in niet worden geïnstalleerd. Probeer het opnieuw en voer je wachtwoord in.',
     noDocuments: 'Je map Application Support is niet gevonden.',
+    inModManager:
+      'WestPlay voegt een plug-in toe aan je game en houdt zijn truckschermen bij in zijn mod, westplay.scs, die je in de Modmanager hebt aangezet. De bestanden van de game zelf blijven onaangeroerd, en als je WestPlay verwijdert, gaat alles weg.',
     keys: { leftAlt: 'Linker Option', rightCtrl: 'Rechter Control', rightAlt: 'Rechter Option' },
   },
 }

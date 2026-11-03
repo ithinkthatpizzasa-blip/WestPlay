@@ -189,6 +189,8 @@ export const words: Words = {
       'Trò chơi của bạn nằm trong thư mục được bảo vệ. macOS sẽ hỏi mật khẩu của bạn một lần, chỉ để sao chép plugin.',
     declined: 'Không có quyền thì không cài được plugin. Hãy thử lại và nhập mật khẩu.',
     noDocuments: 'Không tìm thấy thư mục Application Support của bạn.',
+    inModManager:
+      'WestPlay thêm một plugin vào trò chơi và luôn cập nhật màn hình xe tải của mình trong mod westplay.scs, mà bạn đã bật trong Trình quản lý mod. Các tệp gốc của trò chơi vẫn được giữ nguyên, và gỡ cài đặt WestPlay sẽ xóa tất cả.',
     keys: { leftAlt: 'Option trái', rightCtrl: 'Control phải', rightAlt: 'Option phải' },
   },
 }

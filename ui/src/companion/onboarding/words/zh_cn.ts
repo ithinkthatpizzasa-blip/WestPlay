@@ -185,6 +185,8 @@ export const words: Words = {
     needsAdministrator: '你的游戏位于受保护的文件夹中。macOS 会要求输入一次密码，仅用于复制插件。',
     declined: '没有权限就无法安装插件。请重试并输入密码。',
     noDocuments: '找不到你的“Application Support”文件夹。',
+    inModManager:
+      'WestPlay 会向游戏添加一个插件，并在你已于模组管理器中启用的模组 westplay.scs 里保持 WestPlay 卡车屏幕为最新。游戏本身的文件不会被改动，卸载 WestPlay 会移除所有内容。',
     keys: { leftAlt: '左 Option', rightCtrl: '右 Control', rightAlt: '右 Option' },
   },
 }

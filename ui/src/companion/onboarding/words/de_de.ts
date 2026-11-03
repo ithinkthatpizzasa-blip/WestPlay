@@ -192,6 +192,8 @@ export const words: Words = {
       'Dein Spiel liegt in einem geschützten Ordner. macOS fragt einmal nach deinem Passwort, nur um das Plug-in zu kopieren.',
     declined: 'Ohne sie kann das Plug-in nicht installiert werden. Versuche es erneut und gib dein Passwort ein.',
     noDocuments: 'Dein Ordner „Application Support“ wurde nicht gefunden.',
+    inModManager:
+      'WestPlay fügt deinem Spiel ein Plug-in hinzu und hält seine Lkw-Bildschirme in seinem Mod westplay.scs aktuell, den du im Mod-Manager aktiviert hast. Die Dateien des Spiels selbst bleiben unverändert, und wenn du WestPlay deinstallierst, wird alles entfernt.',
     keys: { leftAlt: 'Linke Wahltaste', rightCtrl: 'Rechte Control-Taste', rightAlt: 'Rechte Wahltaste' },
   },
 }

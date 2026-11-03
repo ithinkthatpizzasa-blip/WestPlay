@@ -193,6 +193,8 @@ export const words: Words = {
       'Jocul tău este într-un dosar protejat. macOS îți va cere parola o singură dată, doar pentru a copia pluginul.',
     declined: 'Fără ea, pluginul nu poate fi instalat. Încearcă din nou și introdu parola.',
     noDocuments: 'Dosarul Application Support nu a fost găsit.',
+    inModManager:
+      'WestPlay adaugă un plugin în joc și își ține la zi ecranele pentru camioane în mod-ul său, westplay.scs, pe care l-ai activat în Managerul de mod-uri. Fișierele jocului rămân neatinse, iar dezinstalarea WestPlay elimină tot.',
     keys: { leftAlt: 'Option stânga', rightCtrl: 'Control dreapta', rightAlt: 'Option dreapta' },
   },
 }

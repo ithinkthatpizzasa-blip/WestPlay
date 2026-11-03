@@ -191,6 +191,8 @@ export const words: Words = {
       'Oyunun korumalı bir klasörde. macOS, yalnızca eklentiyi kopyalamak için bir kez parolanı soracak.',
     declined: 'Eklenti izin olmadan kurulamaz. Tekrar dene ve parolanı gir.',
     noDocuments: 'Application Support klasörün bulunamadı.',
+    inModManager:
+      'WestPlay oyununa bir eklenti ekler ve kamyon ekranlarını, Mod Yöneticisi’nde açık olan westplay.scs modunda güncel tutar. Oyunun kendi dosyalarına dokunulmaz ve WestPlay’i kaldırınca hepsi kaldırılır.',
     keys: { leftAlt: 'Sol Option', rightCtrl: 'Sağ Control', rightAlt: 'Sağ Option' },
   },
 }

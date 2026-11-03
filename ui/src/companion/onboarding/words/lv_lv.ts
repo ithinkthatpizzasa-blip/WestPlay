@@ -193,6 +193,8 @@ export const words: Words = {
       'Tava spēle atrodas aizsargātā mapē. macOS vienreiz pajautās tavu paroli, tikai lai nokopētu spraudni.',
     declined: 'Bez tās spraudni nevar instalēt. Mēģini vēlreiz un ievadi paroli.',
     noDocuments: 'Mape Application Support netika atrasta.',
+    inModManager:
+      'WestPlay pievieno spēlei spraudni un uztur savus kravas auto ekrānus aktuālus savā modā westplay.scs, kuru esi ieslēdzis “Mod Manager”. Pašas spēles faili paliek neskarti, un, atinstalējot WestPlay, viss tiek noņemts.',
     keys: { leftAlt: 'Kreisais Option', rightCtrl: 'Labais Control', rightAlt: 'Labais Option' },
   },
 }

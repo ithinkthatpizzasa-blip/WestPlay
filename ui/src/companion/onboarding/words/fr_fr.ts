@@ -192,6 +192,8 @@ export const words: Words = {
       'Votre jeu se trouve dans un dossier protégé. macOS demandera votre mot de passe une seule fois, uniquement pour copier le plug-in.',
     declined: 'Le plug-in ne peut pas être installé sans elle. Réessayez et saisissez votre mot de passe.',
     noDocuments: 'Votre dossier Application Support est introuvable.',
+    inModManager:
+      'WestPlay ajoute un plug-in à votre jeu et tient à jour ses écrans pour les camions dans son mod, westplay.scs, que vous avez activé dans le Gestionnaire de mods. Les fichiers du jeu lui-même restent intacts, et désinstaller WestPlay retire tout.',
     keys: { leftAlt: 'Option gauche', rightCtrl: 'Contrôle droite', rightAlt: 'Option droite' },
   },
 }

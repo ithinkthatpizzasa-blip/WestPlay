@@ -188,6 +188,8 @@ export const words: Words = {
     needsAdministrator: '게임이 보호된 폴더에 있어요. 플러그인을 복사하기 위해서만 macOS가 한 번 암호를 물어봐요.',
     declined: '권한 없이는 플러그인을 설치할 수 없어요. 다시 시도하고 암호를 입력하세요.',
     noDocuments: 'Application Support 폴더를 찾지 못했어요.',
+    inModManager:
+      'WestPlay는 게임에 플러그인을 추가하고, MOD 관리자에서 켜 둔 모드 westplay.scs에서 WestPlay의 트럭 화면을 최신으로 유지해요. 게임 자체의 파일은 건드리지 않고, WestPlay를 제거하면 모두 지워져요.',
     keys: { leftAlt: '왼쪽 Option', rightCtrl: '오른쪽 Control', rightAlt: '오른쪽 Option' },
   },
 }

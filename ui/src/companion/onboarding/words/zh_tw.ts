@@ -185,6 +185,8 @@ export const words: Words = {
     needsAdministrator: '你的遊戲位於受保護的資料夾中。macOS 會要求輸入一次密碼，僅用於複製外掛程式。',
     declined: '沒有權限就無法安裝外掛程式。請重試並輸入密碼。',
     noDocuments: '找不到你的「Application Support」資料夾。',
+    inModManager:
+      'WestPlay 會在遊戲中加入一個外掛程式，並在你已於 MOD 管理中啟用的模組 westplay.scs 裡讓 WestPlay 的卡車螢幕保持最新。遊戲本身的檔案不會被更動，解除安裝 WestPlay 會移除所有內容。',
     keys: { leftAlt: '左 Option', rightCtrl: '右 Control', rightAlt: '右 Option' },
   },
 }

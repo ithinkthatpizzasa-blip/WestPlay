@@ -89,6 +89,8 @@ describe('the onboarding’s words on the Mac', () => {
     expect(install.needsAdministrator.text).toBe(mac.needsAdministrator)
     expect(install.declined.text).toBe(mac.declined)
     expect(install.noDocuments).toBe(mac.noDocuments)
+    // The install step's line when the mod is kept in Mod Manager names the mod.
+    expect(mac.inModManager, code).toContain('westplay.scs')
     expect(controls.keys).toEqual({ ...windows.controls.keys, ...mac.keys })
     expect([controls.alt, controls.ctrl]).toEqual(['⌥', '⌃'])
     // Each says it its own way, not Windows' words again.
