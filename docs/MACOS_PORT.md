@@ -738,3 +738,45 @@ are byte for byte as they were (only lines added to the words files).
 - Not done: most Macs have **no right Control key** (none on a MacBook's or Apple's keyboards), so the "Right Control"
   preset fits only a PC keyboard on a Mac; right Option would be the Mac's second key (a settings change, not words).
   The translations other than English are, as before, without a native speaker's review.
+
+### Setup in the companion on the Mac (2026-11-03)
+
+**The screen mod stays where the player keeps it.** Install built the mod into WestPlay's own folder and then took
+WestPlay 1.2's copy out of the game's `mod` folder and out of every profile's active mods (Windows' clean-up). On the
+owner's Mac that copy is theirs: `westplay.scs` in `~/Library/Application Support/Euro Truck Simulator 2/mod/`,
+switched on in the Mod Manager (and the plugin mounts nothing while it's there). Owner, asked: setup may make it again
+in place, never move or take it out. So on macOS (`game_mod::home`): when `mod/westplay.scs` is there, setup and the
+installed mods' watcher write the mod there (same name, same folder: the Mod Manager's switch is untouched), and
+the 1.2 clean-up is skipped (no copy taken out, no profile changed). With no copy there, WestPlay's own folder, as
+on Windows, for the plugin to mount; and if the player takes their copy out later, the watcher makes WestPlay's own.
+`tablet_apart.txt` stays in WestPlay's folder, where the plugin reads it. Windows unchanged.
+
+**The tested version.** The onboarding said "WestPlay was built for version 1.61. Yours hasn't been tested yet" for
+the Mac's 1.57.2.7: on macOS the tested versions are now `1.57.*` (`game::TESTED_VERSIONS`); seen with a tick.
+
+**Run through the onboarding** (debug-built app in a hand-made `.app`, the UI's dev server; the game closed):
+- The window showed 1.9 s after start (the first page drawn).
+- "Your game": Steam's, 1.57.2.7, 102 DLCs, "…on this computer."
+- "Here's your setup": 102 DLCs, the 9 map DLCs, the trucks (DAF XF/XG/XF Electric/XD, both Scania 7" and the Smart
+  Dash, Iveco S-Way, Volvo FH 2021/2024 ticked; Jasper's DAF and Oyuncuyusbis' coaches "Mod not installed"; Renault
+  T 2024 "Not supported yet"), the three profiles (the owner's with ProMods' seven packs).
+- Install (owner's go-ahead; the app given the plugin already in the game, so its bytes matched and nothing was
+  copied): "WestPlay is installed". The mod written to `…/Euro Truck Simulator 2/mod/westplay.scs` (1,674,078 bytes;
+  was 1,532,838, built 2026-11-02), nothing in WestPlay's folder but `tablet_apart.txt`; the plugin's bytes unchanged;
+  no `profile.sii` changed.
+- Its words still say "nothing to turn on in Mod Manager", which isn't so for a player keeping the mod there (to fix).
+- The map step: the app keeps its maps in `~/Library/Application Support/app.westplay/maps` (its local data folder,
+  as `%LOCALAPPDATA%\app.westplay\maps` on Windows); the stand-in's standalone host kept them in
+  `~/Library/Application Support/WestPlay/maps`, so the app built its own: the owner's ProMods profile's in 484 s with
+  the debug build (149 MB, "Your map is ready"), then the plain map for the other two. The stand-in's ~300 MB there are
+  left over once it's retired (the owner's to remove).
+- "Hold to use the screen": ⌥ Left Option (chosen), ⌃ Right Control, the mouse's side buttons.
+- YouTube (skipped) and Spotify: "Not signed in": the app's WebKit data is its own, not the stand-in host's, so the
+  owner signs in to Spotify once more in the app. Apple Music not looked at (the owner doesn't use it).
+- Not seen yet: the onboarding's last steps (Apple Music, the tutorial), the companion's own pages after it, and
+  uninstall. The app was stopped from outside at 21:13 (SIGTERM, not this session's doing), with another WestPlay
+  started from the main checkout.
+- Meanwhile (not this session's run): `setup.json` says the onboarding was finished at 15:38, and an app started at
+  16:07 drew WestPlay on the truck's screen in the game until 16:21 (`app.log`: "game: connected", "drawing WestPlay
+  on the truck's screen", 81 performance lines, the game 24–41 fps); `westplay.scs` was made again in the `mod`
+  folder at 16:04 (same size), the plugin's bytes unchanged.
