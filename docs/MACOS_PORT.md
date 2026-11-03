@@ -493,7 +493,7 @@ frame; `OUTSIDE=<file>` stops drawing it while that file exists; `TRUCK=none` fo
     uninstall sheet did. Now "computer", each language's own word (as Polish, Turkish and Latin American Spanish
     already said), on Windows too: 59 strings, the cabin's (English) and the companion's in 20 languages. Seen:
     "…on this computer.".
-- Bundling (`bundle.active` false, Windows' installer): the Mac's `.app` and its signing are still to do (Phase 4).
+- Bundling (`bundle.active` false, Windows' installer): the Mac's `.app` and its signing: [Shipping on the Mac](#shipping-on-the-mac).
 
 ## Phase 3: the plugin in the Mac game (2026-11-02)
 
@@ -701,3 +701,155 @@ build (`cargo build --release -p westplay-host`, `target/release/westplay-host`)
   30–35 fps: 17–19 frames a second sent, each written into the screen in 1.1 ms (the plugin's log). Owner: "smooth
   enough". Still short of a video's 25–30: a round snapshots every WebView shown and composites them on the main
   thread; snapshotting the cabin page only when it changes would leave the player's alone in most rounds.
+
+## Shipping on the Mac
+
+Phase 4's bundle (2026-11-03): the companion as a `.app` with the plugin inside, its `.dmg`, the updater's archive,
+ad-hoc signed for this Mac; and what a release for everyone needs from the owner's Apple Developer account.
+
+### What `npm run build:mac` makes (`tools/build_macos.sh`)
+
+1. The plugin: `tools/build_plugin_macos.sh` (x86_64, release, ad-hoc signed) as `target/release/westplay.dylib`.
+2. The companion: `tauri build --config app/tauri.release.macos.conf.json --target universal-apple-darwin`, into
+   `target/universal-apple-darwin/release/bundle/`:
+
+| File | What |
+|---|---|
+| `macos/WestPlay.app` | The companion, universal (arm64 and x86_64, one binary made with `lipo`): Intel Macs too |
+| `…/Contents/Resources/westplay.dylib` | The plugin, where setup takes it from in a release build (`app/src/setup.rs plugin_file`) |
+| `…/Contents/Resources/ui/` | The built UI (the cabin's pages the host serves) |
+| `…/Contents/Resources/LICENSE.txt`, `THIRD_PARTY_*.md` | As Windows' installer ships them |
+| `dmg/WestPlay_<version>_universal.dmg` | The app and a link to Applications, to drag it there |
+| `macos/WestPlay.app.tar.gz` | The updater's archive (`createUpdaterArtifacts`); its `.sig` only with the updater's key |
+
+3. Checks: the plugin in the `.app` is byte for byte the one built (`cmp`), and `codesign --verify --deep --strict`
+   on the app.
+
+The config is a file of its own, beside Windows' `app/tauri.release.conf.json` (unchanged: NSIS, `westplay.dll`).
+Tauri merges a `--config` file last, after the platform's `tauri.macos.conf.json`, so Windows' release config
+would win on the Mac too (its `targets: ["nsis"]`, its `westplay.dll`). `app/tauri.conf.json` only gained
+`icons/icon.icns` in `bundle.icon` (Windows' build takes the `.ico` from that list as before).
+
+`tauri build` lays the `.dmg`'s window out with AppleScript in Finder (it mounts the image and Finder shows it for a
+moment). With `CI=true` it skips that (`--skip-jenkins`): the `.dmg` still has the app and the Applications link,
+only not the window's size and icon places. Built here with `CI=true`, so as not to put Finder windows on the
+owner's screen; a release build can leave it out.
+
+### Signing: ad-hoc, for this Mac
+
+`bundle.macOS.signingIdentity` is `"-"`: Tauri signs the app ad-hoc, with the hardened runtime
+(`hardenedRuntime`, Tauri's default, kept so the release build only changes its identity). Ad-hoc means:
+- It runs on the Mac it was built on, and on another Mac if it's copied without quarantine (AirDrop, `scp`, a USB
+  disk). Downloaded from a browser, it's in quarantine, and Gatekeeper refuses it ("can't be opened" / "is
+  damaged") until the player removes that (`xattr -dr com.apple.quarantine /Applications/WestPlay.app`): fine for
+  testers, not for players.
+- The plugin inside must stay as `build_plugin_macos.sh` signed it. Tauri signs the app's executable and then the
+  bundle, which seals `Resources` without signing what's in it again; `tools/build_macos.sh` checks that it did (its
+  `cmp`), and fails the build if not.
+
+**Entitlements: none.** Each one there could be, and why it isn't needed:
+
+| Entitlement | Needed? |
+|---|---|
+| `cs.allow-jit`, `cs.allow-unsigned-executable-memory` | No: WebKit's JavaScript runs in Apple's own WebContent processes, not WestPlay's |
+| `cs.disable-library-validation` | No: WestPlay loads no library but the system's; the plugin is loaded by the game, which has it |
+| `cs.debugger` | No: the game's memory is read by the plugin, inside the game, through the bridge (Phase 3) |
+| `device.audio-input`, `device.camera` | No: nothing records (no `getUserMedia`, no capture) |
+| `app-sandbox` | No, and it can't be: setup writes into the game's `.app` and its documents (not the App Store) |
+
+**Info.plist: no usage strings.** Each permission macOS could ask for, checked in the code:
+
+| Permission | Used? |
+|---|---|
+| Microphone, camera | No (above) |
+| Screen Recording | No: the host draws its own WebViews (snapshots), and reads only windows' owners and layers (`os/macos.rs is_shown`), which needs none |
+| System audio recording (`NSAudioCaptureUsageDescription`) | No: no Core Audio process tap (Spotify's protected sound was left plain, Phase 2) |
+| Automation, Apple Events (`NSAppleEventsUsageDescription`) | No: the administrator prompt is `osascript`'s own `do shell script … with administrator privileges` (`crates/setup` macOS), which sends no Apple Event to another app |
+| Accessibility, Input Monitoring | No: input comes from the plugin in the game; the host makes its own WebViews' events |
+| Local network | No: the host's servers are on `localhost` |
+
+**`minimumSystemVersion`: 14.0.** The host's WebViews keep each profile's sign-ins in
+`WKWebsiteDataStore dataStoreForIdentifier:`, which is macOS 14's; on 13 WestPlay would stop there. (The game asks
+for 10.9.) Rust's own floor (11 for arm64) is lower, so 14 is the one that counts.
+
+### Updates on the Mac
+
+`createUpdaterArtifacts` makes `WestPlay.app.tar.gz` (the whole app) and, with the updater's private key in
+`TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`), its `.sig`. The key is the owner's and was
+never used here: signing the archive is the release's step, as it is for Windows' installer. The release's
+`latest.json` gets one entry per Mac kind, both the same universal archive:
+
+```json
+"platforms": {
+  "windows-x86_64": { "signature": "…", "url": "…/WestPlay_2.2.0_x64-setup.exe" },
+  "darwin-aarch64": { "signature": "<WestPlay.app.tar.gz.sig's contents>", "url": "…/WestPlay.app.tar.gz" },
+  "darwin-x86_64": { "signature": "<the same>", "url": "…/WestPlay.app.tar.gz" }
+}
+```
+
+(A release can name the archive by its version, `WestPlay_2.2.0_universal.app.tar.gz`, as long as the `url`
+says so: the updater takes the file it's given.) On the Mac the updater replaces the `.app`'s files and returns,
+the old WestPlay still running: `update.rs` now stops the host and starts WestPlay again from the new app
+(Windows' installer did that itself). Setup's `updated` then puts the new plugin into the game, as on Windows.
+Not tried for real: it needs a signed release to update from.
+
+### For a release: what the owner's Apple Developer account gives
+
+A player's Mac opens a downloaded app only if it's signed with a Developer ID and notarized by Apple. What that
+takes, all of it the owner's:
+
+1. **Apple Developer Program** membership, and its **Team ID** (developer.apple.com › Account › Membership).
+2. A **Developer ID Application** certificate, in the login keychain of the Mac that builds: Xcode › Settings ›
+   Accounts › Manage Certificates › "+" › Developer ID Application (or made at developer.apple.com and opened).
+   `security find-identity -v -p codesigning` then lists `Developer ID Application: <Name> (<TEAMID>)`.
+3. **Notarization**, one of:
+   - the Apple ID, an **app-specific password** (account.apple.com › Sign-In and Security) and the Team ID:
+     `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`;
+   - or an **App Store Connect API key** (Users and Access › Integrations › Team Keys, "Developer" access):
+     `APPLE_API_ISSUER`, `APPLE_API_KEY` (its ID) and `APPLE_API_KEY_PATH` (the `.p8` file).
+   (On a build machine without the certificate in its keychain, `APPLE_CERTIFICATE` (the `.p12`, base64) and
+   `APPLE_CERTIFICATE_PASSWORD` let Tauri import it.)
+4. Then the release build is the same command with those set:
+
+```sh
+export APPLE_SIGNING_IDENTITY="Developer ID Application: <Name> (<TEAMID>)"
+export APPLE_ID=… APPLE_PASSWORD=… APPLE_TEAM_ID=…      # or the APPLE_API_* three
+export TAURI_SIGNING_PRIVATE_KEY=… TAURI_SIGNING_PRIVATE_KEY_PASSWORD=…   # the updater's, as for Windows
+npm run build:mac
+```
+
+   `APPLE_SIGNING_IDENTITY` takes the place of the config's `"-"`. `build_plugin_macos.sh` signs the plugin with
+   the same identity, hardened and timestamped; Tauri signs the app (hardened runtime, timestamp), sends it to
+   Apple's notary service (`notarytool`, a few minutes; the first time can take hours: `--skip-stapling` doesn't
+   wait), and staples the ticket to the `.app`. The `.dmg` is made from the stapled app; to have the `.dmg`
+   itself pass Gatekeeper offline too, notarize and staple it after:
+   `xcrun notarytool submit <dmg> --apple-id … --team-id … --password … --wait` and `xcrun stapler staple <dmg>`.
+5. Check: `codesign -dvv WestPlay.app` (Authority=Developer ID Application…, `flags=0x10000(runtime)`),
+   `spctl -a -vv -t exec WestPlay.app` ("accepted, source=Notarized Developer ID"), `xcrun stapler validate`,
+   and the same `codesign -dvv` on `Contents/Resources/westplay.dylib`.
+
+**The plugin and setup's byte compare.** Apple's notary service checks every Mach-O in the app, the plugin in
+`Resources` too: an ad-hoc plugin would fail notarization, which is why `build_plugin_macos.sh` signs it with the
+release's identity before Tauri bundles it (and Tauri leaves it as it is). Setup installs the shipped plugin's bytes
+as they are (it signs only an unsigned one) and tells the installed plugin current by comparing bytes, so:
+- the Developer ID plugin in the `.app` is what lands in the game, and is "current" afterwards, as the ad-hoc one
+  is now;
+- going from an ad-hoc build (this Mac's) to a release, or between two releases, the bytes differ and setup
+  replaces it, as it should;
+- the game loads it either way: its `disable-library-validation` takes any signature (Phase 0).
+Anything that signs the plugin after `build_plugin_macos.sh` (a `codesign --deep` over the app, say) changes its
+bytes in the `.app` but not in the game: the next start's setup would just put it in again. `tools/build_macos.sh`
+fails if the plugin in the app isn't the one built.
+
+### Status (2026-11-03)
+
+- Done: the config, `tools/build_macos.sh` (`npm run build:mac`), the plugin's Developer ID signing, the restart
+  after a Mac update; `cargo clippy -p westplay-app --all-targets` and `cargo test -p westplay-app` on the Mac,
+  and Windows' `cargo xwin clippy -p westplay-app --all-targets` (clean for the app; the only warnings are clippy
+  1.99's new `chunks_exact_to_as_chunks` in the host's and setup's code, there before). Windows' release config is
+  unchanged.
+- **Not built yet.** The first `npm run build:mac` was stopped in the middle of the Intel half (the owner was
+  playing and the build slowed the game). Heavy builds only with the game closed. To record when it's run: the
+  sizes, `lipo -archs` on the app's binary, the `cmp` of the plugin, `codesign -dvv` (ad-hoc, `runtime` flag),
+  and what the updater's step does without `TAURI_SIGNING_PRIVATE_KEY`.
+- Not opened: opening the built app starts WestPlay (ask the owner first; one WestPlay at a time).
