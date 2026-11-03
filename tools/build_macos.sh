@@ -10,6 +10,12 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 cd "$root"
 sh tools/build_plugin_macos.sh
+# The updater's archive is signed with WestPlay's private key, the release's to give (TAURI_SIGNING_PRIVATE_KEY):
+# without it Tauri makes everything, then fails on the signature. A build without the key leaves the archive out.
+if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+    echo "No TAURI_SIGNING_PRIVATE_KEY: building without the updater's archive (a release has the key)." >&2
+    set -- --config '{"bundle":{"createUpdaterArtifacts":false}}' "$@"
+fi
 npx --no tauri build --config app/tauri.release.macos.conf.json --target universal-apple-darwin "$@"
 bundle=target/universal-apple-darwin/release/bundle
 app=$bundle/macos/WestPlay.app
@@ -18,4 +24,5 @@ if ! cmp -s target/release/westplay.dylib "$app/Contents/Resources/westplay.dyli
     exit 1
 fi
 codesign --verify --deep --strict "$app"
-ls -d "$app" "$bundle"/dmg/*.dmg "$bundle"/macos/*.tar.gz*
+ls -d "$app" "$bundle"/dmg/*.dmg
+ls "$bundle"/macos/*.tar.gz* 2>/dev/null || true

@@ -720,7 +720,7 @@ ad-hoc signed for this Mac; and what a release for everyone needs from the owner
 | `…/Contents/Resources/ui/` | The built UI (the cabin's pages the host serves) |
 | `…/Contents/Resources/LICENSE.txt`, `THIRD_PARTY_*.md` | As Windows' installer ships them |
 | `dmg/WestPlay_<version>_universal.dmg` | The app and a link to Applications, to drag it there |
-| `macos/WestPlay.app.tar.gz` | The updater's archive (`createUpdaterArtifacts`); its `.sig` only with the updater's key |
+| `macos/WestPlay.app.tar.gz`, `.sig` | The updater's archive and its signature (`createUpdaterArtifacts`): only with the updater's key (below) |
 
 3. Checks: the plugin in the `.app` is byte for byte the one built (`cmp`), and `codesign --verify --deep --strict`
    on the app.
@@ -774,8 +774,10 @@ for 10.9.) Rust's own floor (11 for arm64) is lower, so 14 is the one that count
 
 ### Updates on the Mac
 
-`createUpdaterArtifacts` makes `WestPlay.app.tar.gz` (the whole app) and, with the updater's private key in
-`TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`), its `.sig`. The key is the owner's and was
+`createUpdaterArtifacts` makes `WestPlay.app.tar.gz` (the whole app) and its `.sig`, signed with the updater's
+private key in `TAURI_SIGNING_PRIVATE_KEY` (and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Without the key, Tauri makes
+the app, the `.dmg` and the archive and then fails ("A public key has been found, but no private key"), so
+`tools/build_macos.sh` leaves the archive out of a build without the key. The key is the owner's and was
 never used here: signing the archive is the release's step, as it is for Windows' installer. The release's
 `latest.json` gets one entry per Mac kind, both the same universal archive:
 
@@ -848,8 +850,20 @@ fails if the plugin in the app isn't the one built.
   and Windows' `cargo xwin clippy -p westplay-app --all-targets` (clean for the app; the only warnings are clippy
   1.99's new `chunks_exact_to_as_chunks` in the host's and setup's code, there before). Windows' release config is
   unchanged.
-- **Not built yet.** The first `npm run build:mac` was stopped in the middle of the Intel half (the owner was
-  playing and the build slowed the game). Heavy builds only with the game closed. To record when it's run: the
-  sizes, `lipo -archs` on the app's binary, the `cmp` of the plugin, `codesign -dvv` (ad-hoc, `runtime` flag),
-  and what the updater's step does without `TAURI_SIGNING_PRIVATE_KEY`.
+- **Built** (2026-11-03, with the game closed; the first try had been stopped halfway, the owner playing and the
+  build slowing the game: heavy builds only with the game closed). From the cache, about 2 minutes; from nothing,
+  both halves, several more.
+  - `WestPlay.app` 60.9 MiB: its `westplay` is `x86_64 arm64` (`lipo -archs`); `Contents/Resources` holds
+    `westplay.dylib` (`x86_64`), `ui/`, `icon.icns` and the licences. Info.plist: `app.westplay`, 2.1.4,
+    `LSMinimumSystemVersion` 14.0, `public.app-category.games`, no usage strings.
+  - Signed: `flags=0x10002(adhoc,runtime)`, no entitlements; `codesign --verify --deep --strict` passes.
+  - **The plugin went in unchanged**: `cmp` with `target/release/westplay.dylib` (SHA-256 `5dc432ab…`), still its
+    own ad-hoc signature (`flags=0x2(adhoc)`): Tauri didn't sign it again. The same in the `.dmg`'s app and in
+    the updater's archive.
+  - `WestPlay_2.1.4_universal.dmg` 22.0 MiB: the app and the Applications link (mounted hidden, read-only), its
+    app verifies.
+  - `WestPlay.app.tar.gz` 22.3 MiB was made, and then the build failed on its signature (no key; above): since
+    then `build_macos.sh` builds without it unless the key is set (its arguments checked; a whole run with that
+    change not yet made: the game started 20 s into it and the build was stopped). Notarization skipped, as Tauri says, without
+    Apple's account.
 - Not opened: opening the built app starts WestPlay (ask the owner first; one WestPlay at a time).
