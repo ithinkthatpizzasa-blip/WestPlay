@@ -16,6 +16,10 @@
 //! Worked out on version 1.61.1.1, watching the weather turn to rain; what's read is checked (each weather
 //! 0 or 1), and a game whose code doesn't match shows no weather.
 //!
+//! The Mac game (1.57, Apple's compiler) has no such copy: it's found by the `g_set_weather` command, which
+//! hands the weather object (`mov rcx, [global]; mov rdi, [rcx + weather]`) to the code that sets it, and by
+//! the game's own snapshot of its weather ([`locate_mac`]).
+//!
 //! The timer falls by about 20 each game minute (the drive autosaves, 15 game minutes apart, have it about
 //! 298 lower each time: [`TIMER_PER_GAME_MINUTE`]); the wetness is 0 on dry roads (0.59 in a save made in
 //! the rain). Either one that doesn't read as such is left out, the weather kept.
@@ -27,7 +31,9 @@ use std::time::{Duration, Instant};
 
 use westplay_shared::BridgeMapping;
 
-use crate::route::{Memory, Process, Section, section};
+#[cfg(windows)]
+use crate::route::section;
+use crate::route::{Memory, Process, Section};
 
 /// How often the weather is read: it changes every few minutes, over about one.
 const READ_EVERY: Duration = Duration::from_secs(2);
@@ -130,7 +136,7 @@ impl WeatherWatch {
 fn open(pid: u32) -> Option<(Process, Layout)> {
     let process = Process::open(pid, "weather")?;
     let image = std::fs::read(&process.exe).ok()?;
-    let Some(layout) = section(&image, b".text\0").and_then(|text| locate(&text)) else {
+    let Some(layout) = locate_in_image(&image) else {
         log!("weather: the game's weather wasn't found in {} (a new game version?)", process.exe.display());
         return None;
     };
@@ -171,12 +177,85 @@ fn read(memory: &impl Memory, base: usize, layout: &Layout) -> Option<Weather> {
     Some(Weather { now: sky(layout.current)?, coming: sky(layout.target)?, change_in, wetness })
 }
 
+/// The weather's layout, from the game's executable file: its code (`.text`).
+#[cfg(windows)]
+fn locate_in_image(image: &[u8]) -> Option<Layout> {
+    locate(&section(image, b".text\0")?)
+}
+
+/// The weather's layout, from the Mac game's executable file (its x86_64 part): its code (`__text`).
+#[cfg(target_os = "macos")]
+fn locate_in_image(image: &[u8]) -> Option<Layout> {
+    let image = crate::route::mach_o_x86_64(image)?;
+    locate_mac(&crate::route::mach_o_section(image, b"__text")?)
+}
+
+/// Where `fixed` (each piece of bytes at its offset) lies in `code`, if exactly once.
+#[cfg_attr(windows, allow(dead_code))]
+fn unique(code: &[u8], fixed: &[(usize, &[u8])], length: usize) -> Option<usize> {
+    let fits = |at: usize| fixed.iter().all(|&(offset, bytes)| code[at + offset..].starts_with(bytes));
+    let mut found = (0..code.len().saturating_sub(length)).filter(|&at| fits(at));
+    let at = found.next()?;
+    found.next().is_none().then_some(at)
+}
+
+/// The weather's layout in the Mac game (1.57.2.7, read 2026-11-03), from three places in its code:
+/// - `g_set_weather`'s handler: `mov rcx, [rip + global]; mov rdi, [rcx + weather]; movzx edx, al; call set`;
+/// - the start of what it calls, setting the weather at once: `mov [rbx + current], r15d; mov [rbx + target],
+///   r15d` (the target alone, set to turn to it);
+/// - the game's snapshot of its weather, which copies both weathers as one (`mov rsi, [rbx + current]`), then
+///   the wetness, whether it's changing (with when), and the timer.
+#[cfg(target_os = "macos")]
+fn locate_mac(text: &Section) -> Option<Layout> {
+    let code = text.bytes;
+    let word = |at: usize| u32::from_le_bytes(code[at..at + 4].try_into().unwrap()) as usize;
+    const HANDLER: [(usize, &[u8]); 4] = [
+        (0, &[0x48, 0x8b, 0x0d]),  // mov rcx, [rip + global]
+        (7, &[0x48, 0x8b, 0xb9]),  // mov rdi, [rcx + weather]
+        (14, &[0x0f, 0xb6, 0xd0]), // movzx edx, al
+        (17, &[0xe8]),             // call set
+    ];
+    let handler = unique(code, &HANDLER, 22)?;
+    let set = (handler + 22).checked_add_signed(word(handler + 18) as i32 as isize)?;
+    // mov [rbx + current], r15d; mov [rbx + target], r15d: within the set's first instructions.
+    let stores = (set..set + 0x40).find(|&at| {
+        code.get(at..at + 14).is_some_and(|b| b[..3] == [0x44, 0x89, 0xbb] && b[7..10] == [0x44, 0x89, 0xbb])
+    })?;
+    let (current, target) = (word(stores + 3), word(stores + 10));
+    const SNAPSHOT: [(usize, &[u8]); 10] = [
+        (0, &[0x48, 0x8b, 0xb3]),       // mov rsi, [rbx + current] (and the target)
+        (7, &[0xf3, 0x0f, 0x7e, 0x83]), // movq xmm0, [rbx + ...]
+        (15, &[0x66, 0x48, 0x0f, 0x6e, 0xce, 0x66, 0x0f, 0x6c, 0xc8]), // movq xmm1, rsi; punpcklqdq xmm1, xmm0
+        (24, &[0xf3, 0x0f, 0x7f, 0x8b]), // movdqu [rbx + ...], xmm1
+        (32, &[0xf3, 0x0f, 0x10, 0x83]), // movss xmm0, [rbx + wetness]
+        (40, &[0xf3, 0x0f, 0x11, 0x83]), // movss [rbx + ...], xmm0
+        (48, &[0x48, 0x8b, 0x83]),      // mov rax, [rbx + changing]
+        (55, &[0x48, 0x89, 0x83]),      // mov [rbx + ...], rax
+        (62, &[0xf3, 0x0f, 0x10, 0x83]), // movss xmm0, [rbx + timer]
+        (70, &[0xf3, 0x0f, 0x11, 0x83]), // movss [rbx + ...], xmm0
+    ];
+    let snapshot = unique(code, &SNAPSHOT, 78)?;
+    // The same weathers, side by side (the snapshot copies them as one).
+    if word(snapshot + 3) != current || target != current + 4 {
+        return None;
+    }
+    Some(Layout {
+        global_rva: (text.rva + handler + 7).wrapping_add_signed(word(handler + 3) as i32 as isize),
+        weather: word(handler + 10),
+        current,
+        target,
+        timer: word(snapshot + 66),
+        wetness: word(snapshot + 36),
+    })
+}
+
 /// How far before the save's copy of the weather the global it's read through may be loaded, bytes.
 const GLOBAL_BEFORE: usize = 0x800;
 
 /// The weather's layout, from the game's code (`.text`): the save's copy of the weather (see the module's
 /// notes), with the weather object's pointer and the weather there is and coming in it, and before it the
 /// load of the global (`48 8B 3D disp32`: mov rdi, [rip + disp32]) nearest it.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn locate(text: &Section) -> Option<Layout> {
     let code = text.bytes;
     let word = |at: usize| u32::from_le_bytes(code[at..at + 4].try_into().unwrap()) as usize;
@@ -266,6 +345,77 @@ mod tests {
         assert_eq!(locate(&Section { rva: 0x1000, bytes: &other }), None);
         // The global loaded too far before it.
         assert_eq!(locate(&Section { rva: 0x1000, bytes: &code(0x900) }), None);
+    }
+
+    /// The Mac game's code as 1.57.2.7 has it: `g_set_weather`'s handler at 0x100 calling the set at 0x400, the
+    /// snapshot at 0x800.
+    #[cfg(target_os = "macos")]
+    fn mac_code() -> Vec<u8> {
+        let mut code = vec![0x90u8; 0x1000];
+        let handler: [u8; 22] = [
+            0x48, 0x8b, 0x0d, 0x10, 0x56, 0x10, 0x02, // mov rcx, [rip + 0x2105610]
+            0x48, 0x8b, 0xb9, 0xf0, 0x07, 0x00, 0x00, // mov rdi, [rcx + 0x7f0]
+            0x0f, 0xb6, 0xd0, // movzx edx, al
+            0xe8, 0xea, 0x02, 0x00, 0x00, // call 0x400
+        ];
+        code[0x100..0x116].copy_from_slice(&handler);
+        let set: [u8; 22] = [
+            0x85, 0xd2, // test edx, edx
+            0x0f, 0x84, 0xe2, 0x00, 0x00, 0x00, // je
+            0x44, 0x89, 0xbb, 0x48, 0x3e, 0x00, 0x00, // mov [rbx + 0x3e48], r15d
+            0x44, 0x89, 0xbb, 0x4c, 0x3e, 0x00, 0x00, // mov [rbx + 0x3e4c], r15d
+        ];
+        code[0x400..0x416].copy_from_slice(&set);
+        let snapshot: [u8; 78] = [
+            0x48, 0x8b, 0xb3, 0x48, 0x3e, 0x00, 0x00, // mov rsi, [rbx + 0x3e48]
+            0xf3, 0x0f, 0x7e, 0x83, 0x58, 0x3e, 0x00, 0x00, // movq xmm0, [rbx + 0x3e58]
+            0x66, 0x48, 0x0f, 0x6e, 0xce, // movq xmm1, rsi
+            0x66, 0x0f, 0x6c, 0xc8, // punpcklqdq xmm1, xmm0
+            0xf3, 0x0f, 0x7f, 0x8b, 0x58, 0x46, 0x00, 0x00, // movdqu [rbx + 0x4658], xmm1
+            0xf3, 0x0f, 0x10, 0x83, 0xc0, 0x45, 0x00, 0x00, // movss xmm0, [rbx + 0x45c0]
+            0xf3, 0x0f, 0x11, 0x83, 0x68, 0x46, 0x00, 0x00, // movss [rbx + 0x4668], xmm0
+            0x48, 0x8b, 0x83, 0x4c, 0x45, 0x00, 0x00, // mov rax, [rbx + 0x454c]
+            0x48, 0x89, 0x83, 0x6c, 0x46, 0x00, 0x00, // mov [rbx + 0x466c], rax
+            0xf3, 0x0f, 0x10, 0x83, 0x48, 0x45, 0x00, 0x00, // movss xmm0, [rbx + 0x4548]
+            0xf3, 0x0f, 0x11, 0x83, 0x74, 0x46, 0x00, 0x00, // movss [rbx + 0x4674], xmm0
+        ];
+        code[0x800..0x84e].copy_from_slice(&snapshot);
+        code
+    }
+
+    #[cfg(target_os = "macos")]
+    const MAC_LAYOUT: Layout =
+        Layout { global_rva: 0, weather: 0x7f0, current: 0x3e48, target: 0x3e4c, timer: 0x4548, wetness: 0x45c0 };
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn finds_the_mac_weather_through_its_command_and_snapshot() {
+        let layout = locate_mac(&Section { rva: 0x1000, bytes: &mac_code() }).unwrap();
+        assert_eq!(layout, Layout { global_rva: 0x1000 + 0x107 + 0x2105610, ..MAC_LAYOUT });
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn mac_code_that_doesnt_agree_finds_nothing() {
+        // The snapshot copies other weathers than the command sets.
+        let mut other = mac_code();
+        other[0x803] = 0x50;
+        assert_eq!(locate_mac(&Section { rva: 0x1000, bytes: &other }), None);
+        // Two handlers: which one is it?
+        let mut twice = mac_code();
+        twice.copy_within(0x100..0x116, 0x200);
+        assert_eq!(locate_mac(&Section { rva: 0x1000, bytes: &twice }), None);
+    }
+
+    /// The weather found in the Mac game's executable named by `WESTPLAY_MAC_GAME` (1.57.2.7s: the core's global at
+    /// `+0x26DB3E0`, as the navigator's, the weather object at `+0x7F0` of it).
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "needs the Mac game's executable: WESTPLAY_MAC_GAME"]
+    fn finds_the_weather_in_the_mac_game() {
+        let file = std::fs::read(std::env::var("WESTPLAY_MAC_GAME").expect("WESTPLAY_MAC_GAME")).unwrap();
+        let layout = locate_in_image(&file).expect("the weather isn't found");
+        assert_eq!(layout, Layout { global_rva: 0x26db3e0, ..MAC_LAYOUT });
     }
 
     #[derive(Default)]
