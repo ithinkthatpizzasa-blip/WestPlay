@@ -781,6 +781,7 @@ fn read_getter_mac(code: &[u8], start: usize, rva: usize) -> Option<Layout> {
 }
 
 /// A section of an executable file (`image`) by its name (NUL-terminated, eight bytes at most).
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 pub(crate) fn section<'a>(image: &'a [u8], name: &[u8]) -> Option<Section<'a>> {
     let u16_at = |at: usize| image.get(at..at + 2).map(|b| u16::from_le_bytes(b.try_into().unwrap()));
     let u32_at = |at: usize| image.get(at..at + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()) as usize);
