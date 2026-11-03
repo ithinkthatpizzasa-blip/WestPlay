@@ -721,10 +721,10 @@ are byte for byte as they were (only lines added to the words files).
     protected folder. macOS will ask for your password once, only to copy the plugin.", "…Try again and enter your
     password.", and the update's "macOS asks for your password, as when you installed it.";
   - `noDocuments`: "Your Application Support folder couldn't be found." (WestPlay's folder is there on the Mac);
-  - the keys: "Left Option", "Right Control" (Apple's own names where a language has them: Wahltaste, Opción,
-    Opzione, Opção, Tilvalg, Alternativ, Optio, Contrôle…; "Option"/"Control" elsewhere), on ⌥ and ⌃ keycaps (every
-    Mac keyboard has the symbols, whatever words it prints); other keys' names were already the Mac's (the host's
-    `key_name`);
+  - the keys: "Left Option", "Right Option", "Right Control" (Apple's own names where a language has them:
+    Wahltaste, Opción, Opzione, Opção, Tilvalg, Alternativ, Optio, Contrôle…; "Option"/"Control" elsewhere), on ⌥
+    and ⌃ keycaps (every Mac keyboard has the symbols, whatever words it prints); other keys' names were already the
+    Mac's (the host's `key_name`);
   - the game kept out of WestPlay's reach: on the Mac the host reports it when the game runs as another user (root,
     say: `os/macos.rs is_elevated`), so it says "The game is running as another user… Start the game normally, as
     yourself." rather than "as administrator";
@@ -735,6 +735,10 @@ are byte for byte as they were (only lines added to the words files).
   (`words.test.ts`, both; `system.test.ts`). Seen in the preview with `?system=mac`: the install step after the
   game's folder refused ("Install with Password", the note, the screen's "macOS will ask for your password"), the
   update sheet, Controls (⌥ Left Option, ⌃ Right Control, "Left Option + 1"), About; and `?system=windows` as before.
-- Not done: most Macs have **no right Control key** (none on a MacBook's or Apple's keyboards), so the "Right Control"
-  preset fits only a PC keyboard on a Mac; right Option would be the Mac's second key (a settings change, not words).
-  The translations other than English are, as before, without a native speaker's review.
+- **Right Option in place of Right Control** (owner, 2026-11-03): most Macs have no right Control key (no MacBook's
+  keyboard, nor Apple's), so the Mac offers left Option, right Option (0xA5, which the plugin already takes for
+  `kVK_RightOption`) and the mouse's two side buttons (`offeredKeys` in `system.ts`); Windows' four are as they were.
+  Right Control set before still works and is named, it just isn't offered. Only the Mac's words name right Option
+  (`mac.keys.rightAlt`): on Windows 0xA5 is still named by Windows. Seen in the preview: chosen, it's "Right Option"
+  everywhere ("Right Option + 1" in the keybinds).
+- The translations other than English are, as before, without a native speaker's review.
