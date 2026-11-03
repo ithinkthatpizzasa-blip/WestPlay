@@ -186,4 +186,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Инсталирај са лозинком',
+    permission: 'macOS ће тражити вашу лозинку',
+    needsAdministrator:
+      'Ваша игра је у заштићеној фасцикли. macOS ће једном тражити вашу лозинку, само за копирање додатка.',
+    declined: 'Без ње додатак не може да се инсталира. Покушајте поново и унесите лозинку.',
+    noDocuments: 'Фасцикла „Application Support“ није пронађена.',
+    keys: { leftAlt: 'Леви Option', rightCtrl: 'Десни Control' },
+  },
 }

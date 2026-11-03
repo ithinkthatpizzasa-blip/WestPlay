@@ -187,4 +187,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Zainstaluj z hasłem',
+    permission: 'macOS zapyta o twoje hasło',
+    needsAdministrator:
+      'Gra jest w chronionym folderze. macOS zapyta o twoje hasło jeden raz, tylko po to, by skopiować wtyczkę.',
+    declined: 'Bez niej nie można zainstalować wtyczki. Spróbuj ponownie i wpisz hasło.',
+    noDocuments: 'Nie znaleziono twojego folderu Application Support.',
+    keys: { leftAlt: 'Lewy Option', rightCtrl: 'Prawy Control' },
+  },
 }

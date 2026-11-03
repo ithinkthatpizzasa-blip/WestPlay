@@ -185,4 +185,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instaliraj s lozinkom',
+    permission: 'macOS će zatražiti vašu lozinku',
+    needsAdministrator:
+      'Vaša je igra u zaštićenoj mapi. macOS će jednom zatražiti vašu lozinku, samo za kopiranje dodatka.',
+    declined: 'Bez njega se dodatak ne može instalirati. Pokušajte ponovno i unesite lozinku.',
+    noDocuments: 'Mapa Application Support nije pronađena.',
+    keys: { leftAlt: 'Lijevi Option', rightCtrl: 'Desni Control' },
+  },
 }

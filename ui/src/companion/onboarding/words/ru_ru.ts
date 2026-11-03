@@ -186,4 +186,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Установить с паролем',
+    permission: 'macOS запросит ваш пароль',
+    needsAdministrator:
+      'Игра находится в защищённой папке. macOS один раз запросит ваш пароль — только чтобы скопировать плагин.',
+    declined: 'Без него плагин не установить. Попробуйте снова и введите пароль.',
+    noDocuments: 'Не удалось найти папку «Application Support».',
+    keys: { leftAlt: 'Левый Option', rightCtrl: 'Правый Control' },
+  },
 }

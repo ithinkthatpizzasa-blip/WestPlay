@@ -184,4 +184,14 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Installeer met wachtwoord',
+    permission: 'macOS vraagt om je wachtwoord',
+    needsAdministrator:
+      'Je game staat in een beveiligde map. macOS vraagt één keer om je wachtwoord, alleen om de plug-in te kopiëren.',
+    declined:
+      'Zonder toestemming kan de plug-in niet worden geïnstalleerd. Probeer het opnieuw en voer je wachtwoord in.',
+    noDocuments: 'Je map Application Support is niet gevonden.',
+    keys: { leftAlt: 'Linker Option', rightCtrl: 'Rechter Control' },
+  },
 }

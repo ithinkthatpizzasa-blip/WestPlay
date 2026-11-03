@@ -310,4 +310,13 @@ export const words: CompanionWords = {
     button: 'Paremti „Kreosus“',
     note: 'Atidaro „Kreosus“ tavo naršyklėje.',
   },
+  mac: {
+    elevated: {
+      title: 'Žaidimas paleistas kaip kitas naudotojas',
+      text: 'Tada WestPlay nemato jo maršruto, nurodymų ir orų. Paleisk žaidimą įprastai, iš savo paskyros.',
+    },
+    uninstall: 'Pašalinti su slaptažodžiu',
+    finishUpdate:
+      'Naujojo WestPlay papildinys įdedamas į tavo žaidimą. macOS paprašys tavo slaptažodžio, kaip ir diegiant.',
+  },
 }

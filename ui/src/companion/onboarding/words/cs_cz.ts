@@ -186,4 +186,12 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instalovat s heslem',
+    permission: 'macOS se zeptá na heslo',
+    needsAdministrator: 'Hra je v chráněné složce. macOS se jednou zeptá na vaše heslo, jen kvůli zkopírování pluginu.',
+    declined: 'Bez něj nejde plugin nainstalovat. Zkuste to znovu a zadejte heslo.',
+    noDocuments: 'Složka Application Support nebyla nalezena.',
+    keys: { leftAlt: 'Levý Option', rightCtrl: 'Pravý Control' },
+  },
 }

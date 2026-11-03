@@ -185,4 +185,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Įdiegti su slaptažodžiu',
+    permission: 'macOS paprašys tavo slaptažodžio',
+    needsAdministrator:
+      'Tavo žaidimas yra apsaugotame aplanke. macOS vieną kartą paprašys tavo slaptažodžio, tik papildiniui nukopijuoti.',
+    declined: 'Be jo papildinio įdiegti negalima. Bandyk dar kartą ir įvesk slaptažodį.',
+    noDocuments: 'Nepavyko rasti aplanko „Application Support“.',
+    keys: { leftAlt: 'Kairysis Option', rightCtrl: 'Dešinysis Control' },
+  },
 }

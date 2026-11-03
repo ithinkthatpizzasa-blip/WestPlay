@@ -183,4 +183,13 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Installer med passord',
+    permission: 'macOS ber om passordet ditt',
+    needsAdministrator:
+      'Spillet ditt ligger i en beskyttet mappe. macOS ber om passordet ditt én gang, bare for å kopiere programtillegget.',
+    declined: 'Uten den kan programtillegget ikke installeres. Prøv igjen, og skriv inn passordet ditt.',
+    noDocuments: 'Fant ikke Application Support-mappen.',
+    keys: { leftAlt: 'Venstre Tilvalg', rightCtrl: 'Høyre Kontroll' },
+  },
 }

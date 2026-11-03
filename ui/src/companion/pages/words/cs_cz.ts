@@ -311,4 +311,12 @@ export const words: CompanionWords = {
     button: 'Podpořit na Kreosus',
     note: 'Otevře Kreosus v prohlížeči.',
   },
+  mac: {
+    elevated: {
+      title: 'Hra běží pod jiným uživatelem',
+      text: 'WestPlay pak nevidí její trasu, navigaci ani počasí. Spusťte hru normálně, pod svým uživatelem.',
+    },
+    uninstall: 'Odinstalovat s heslem',
+    finishUpdate: 'Plugin nového WestPlay se nainstaluje do vaší hry. macOS se zeptá na heslo jako při instalaci.',
+  },
 }

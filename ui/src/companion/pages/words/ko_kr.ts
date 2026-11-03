@@ -309,4 +309,12 @@ export const words: CompanionWords = {
     button: 'Kreosus에서 후원하기',
     note: '브라우저에서 Kreosus가 열려요.',
   },
+  mac: {
+    elevated: {
+      title: '게임이 다른 사용자로 실행 중이에요',
+      text: '이러면 WestPlay가 게임의 경로, 안내, 날씨를 볼 수 없어요. 내 사용자 계정으로 평소처럼 게임을 실행해요.',
+    },
+    uninstall: '암호로 제거',
+    finishUpdate: '새 WestPlay의 플러그인을 게임에 넣어요. 설치할 때처럼 macOS가 암호를 물어봐요.',
+  },
 }

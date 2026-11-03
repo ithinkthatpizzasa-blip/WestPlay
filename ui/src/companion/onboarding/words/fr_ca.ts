@@ -30,4 +30,10 @@ export const words: Words = {
     pluginFailed: 'Le plugiciel n’a pas pu être installé.',
     noPlugin: 'Il manque le plugiciel dans cette copie de WestPlay. Veuillez réinstaller WestPlay.',
   },
+  mac: {
+    ...france.mac,
+    needsAdministrator:
+      'Votre jeu se trouve dans un dossier protégé. macOS demandera votre mot de passe une seule fois, uniquement pour copier le plugiciel.',
+    declined: 'Le plugiciel ne peut pas être installé sans elle. Réessayez et entrez votre mot de passe.',
+  },
 }
