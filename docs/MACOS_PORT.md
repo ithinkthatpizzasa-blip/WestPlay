@@ -701,3 +701,40 @@ build (`cargo build --release -p westplay-host`, `target/release/westplay-host`)
   30–35 fps: 17–19 frames a second sent, each written into the screen in 1.1 ms (the plugin's log). Owner: "smooth
   enough". Still short of a video's 25–30: a round snapshots every WebView shown and composites them on the main
   thread; snapshotting the cabin page only when it changes would leave the player's alone in most rounds.
+
+## Phase 4: the companion app and shipping
+
+### The companion's words on the Mac (2026-11-03)
+
+The companion named things Windows' way on the Mac too: "Install as Administrator", "Windows will ask once… Choose
+Yes", "Your Documents folder couldn't be found", the keys "Left Alt"/"Right Ctrl" on Alt and Ctrl keycaps, "WebView2"
+and `Documents\WestPlay\logs\plugin.log` on the About page. Now it says the Mac's, in all 43 languages; Windows' words
+are byte for byte as they were (only lines added to the words files).
+- **Which system** (`ui/src/companion/system.ts`): the WebView's user agent (WebKit's says Macintosh, WebView2's
+  Windows), no Tauri command needed. The preview takes `?system=mac` or `?system=windows` (else the browser's), and
+  shows the Mac's paths, WebKit's version and key names with it.
+- **The words**: each language's words have a `mac` part (`MacWords` in `onboarding/words`, `CompanionMacWords` in
+  `pages/words`: required, so no language can leave one out), put in place of Windows' by `wordsFor` and
+  `companionWords` on the Mac (`onMac`, `companionOnMac`). English, as the others say it in their own style:
+  - the administrator's path (a game folder an administrator owns: `osascript … with administrator privileges`):
+    "Install with Password" / "Uninstall with Password", "macOS will ask for your password", "Your game is in a
+    protected folder. macOS will ask for your password once, only to copy the plugin.", "…Try again and enter your
+    password.", and the update's "macOS asks for your password, as when you installed it.";
+  - `noDocuments`: "Your Application Support folder couldn't be found." (WestPlay's folder is there on the Mac);
+  - the keys: "Left Option", "Right Control" (Apple's own names where a language has them: Wahltaste, Opción,
+    Opzione, Opção, Tilvalg, Alternativ, Optio, Contrôle…; "Option"/"Control" elsewhere), on ⌥ and ⌃ keycaps (every
+    Mac keyboard has the symbols, whatever words it prints); other keys' names were already the Mac's (the host's
+    `key_name`);
+  - the game kept out of WestPlay's reach: on the Mac the host reports it when the game runs as another user (root,
+    say: `os/macos.rs is_elevated`), so it says "The game is running as another user… Start the game normally, as
+    yourself." rather than "as administrator";
+  - About: "WebKit" with Safari's version, `~/Library/Application Support/WestPlay/logs/plugin.log`; the copied
+    report says `WebView:` and `macOS:`.
+- Tests: every language on the Mac names nothing of Windows (no "Windows", "WebView2", Alt, Ctrl or Strg in its keys),
+  each Mac word is in its place and none is Windows' word again, and Windows' words are left untouched
+  (`words.test.ts`, both; `system.test.ts`). Seen in the preview with `?system=mac`: the install step after the
+  game's folder refused ("Install with Password", the note, the screen's "macOS will ask for your password"), the
+  update sheet, Controls (⌥ Left Option, ⌃ Right Control, "Left Option + 1"), About; and `?system=windows` as before.
+- Not done: most Macs have **no right Control key** (none on a MacBook's or Apple's keyboards), so the "Right Control"
+  preset fits only a PC keyboard on a Mac; right Option would be the Mac's second key (a settings change, not words).
+  The translations other than English are, as before, without a native speaker's review.
