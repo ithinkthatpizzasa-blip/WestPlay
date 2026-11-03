@@ -7,9 +7,15 @@
 //! eight-byte write, z as a four-byte one) and the code that reads it to make positions relative to the
 //! camera (three subtractions). Both must be there, exactly once, and agree; otherwise the camera isn't
 //! known. Found 2026-10-15 in 1.61 (at +0x36921d8), probed by reading the game's memory.
+//!
+//! The Mac game (1.57.2.7, Apple's compiler) keeps it as a static too (at +0x29a8828, found 2026-11-03 by
+//! watching the game's memory as the camera went from the cab to behind the truck: 3.3 m from the truck, then
+//! 20.9 m). Its writer copies it from the stack z first (`mov eax, [rbp+s+8]; mov [X+8], eax; mov rax, [rbp+s];
+//! mov [X], rax`); two readers take y and z as one (`movsd xmm, [X+4]; subps; mulps`, a distance squared).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+#[cfg(windows)]
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 
 use crate::log;
@@ -18,6 +24,7 @@ use crate::navigation::Image;
 static POSITION: AtomicUsize = AtomicUsize::new(0);
 
 /// `movsd xmm0, [rsp+70h]; mov eax, [rsp+78h]; movsd [rip+X], xmm0; mov [rip+X+8], eax` (`None`: any byte).
+#[cfg(windows)]
 const WRITER: &[Option<u8>] = &[
     Some(0xf2),
     Some(0x0f),
@@ -46,6 +53,7 @@ const WRITER: &[Option<u8>] = &[
 ];
 
 /// `subss xmm7, [rip+X]; mulss xmm0, xmm6; subss xmm1, [rip+X+4]; subss xmm0, [rip+X+8]`.
+#[cfg(windows)]
 const READER: &[Option<u8>] = &[
     Some(0xf3),
     Some(0x0f),
@@ -77,32 +85,130 @@ const READER: &[Option<u8>] = &[
     None,
 ];
 
+/// The camera's position in the game's code mapped at `base`, if both patterns are there once and agree.
+///
+/// # Safety
+/// `base` is the game's executable, as mapped.
+#[cfg(windows)]
+unsafe fn find(base: usize) -> Option<usize> {
+    // SAFETY: `base` is the game's executable, as mapped (the caller's contract).
+    let image = unsafe { Image::of(base) }?;
+    let writer = image.unique_masked(WRITER)?;
+    let reader = image.unique_masked(READER)?;
+    // Each RIP-relative address: the displacement at `at`, from the end of its instruction.
+    // SAFETY: `at` is within an instruction the patterns matched, in the game's code.
+    let target =
+        |at: usize| (at + 4).wrapping_add_signed(i32::from_le_bytes(unsafe { *(at as *const [u8; 4]) }) as isize);
+    let position = target(writer + 14);
+    let agree = target(writer + 20) == position + 8
+        && target(reader + 4) == position
+        && target(reader + 16) == position + 4
+        && target(reader + 24) == position + 8;
+    agree.then_some(position)
+}
+
+/// The Mac writer: `mov eax, [rbp+s+8]; mov [rip+X+8], eax; mov rax, [rbp+s]; mov [rip+X], rax`.
+#[cfg(target_os = "macos")]
+const WRITER: &[Option<u8>] = &[
+    Some(0x8b),
+    Some(0x85),
+    None,
+    None,
+    None,
+    None,
+    Some(0x89),
+    Some(0x05),
+    None,
+    None,
+    None,
+    None,
+    Some(0x48),
+    Some(0x8b),
+    Some(0x85),
+    None,
+    None,
+    None,
+    None,
+    Some(0x48),
+    Some(0x89),
+    Some(0x05),
+    None,
+    None,
+    None,
+    None,
+];
+
+/// The Mac readers: `movsd xmm0, [rip+X+4]; subps xmm1, xmm0; mulps xmm1, xmm1`, and the same with xmm1 and xmm0
+/// swapped.
+#[cfg(target_os = "macos")]
+const READERS: [&[Option<u8>]; 2] = [
+    &[
+        Some(0xf2),
+        Some(0x0f),
+        Some(0x10),
+        Some(0x05),
+        None,
+        None,
+        None,
+        None,
+        Some(0x0f),
+        Some(0x5c),
+        Some(0xc8),
+        Some(0x0f),
+        Some(0x59),
+        Some(0xc9),
+    ],
+    &[
+        Some(0xf2),
+        Some(0x0f),
+        Some(0x10),
+        Some(0x0d),
+        None,
+        None,
+        None,
+        None,
+        Some(0x0f),
+        Some(0x5c),
+        Some(0xc1),
+        Some(0x0f),
+        Some(0x59),
+        Some(0xc0),
+    ],
+];
+
+/// The camera's position in `image`'s code, if the writer and both readers are there once and agree (the writer
+/// taking its x and y, then z, from one place on the stack).
+#[cfg(target_os = "macos")]
+fn find(image: &Image) -> Option<usize> {
+    let word = |at: usize| Some(i32::from_le_bytes(image.code_at(at, 4)?.try_into().ok()?) as isize);
+    // Each RIP-relative address: the displacement at `at`, from the end of its instruction.
+    let target = |at: usize| Some((at + 4).wrapping_add_signed(word(at)?));
+    let writer = image.unique(WRITER)?;
+    let position = target(writer + 22)?;
+    let agree = target(writer + 8)? == position + 8 && word(writer + 2)? == word(writer + 15)? + 8;
+    let readers = READERS.iter().map(|reader| image.unique(reader).and_then(|at| target(at + 4)));
+    (agree && readers.into_iter().all(|read| read == Some(position + 4))).then_some(position)
+}
+
 /// Finds the camera's position in the running game; logs whether it did.
 ///
 /// # Safety
 /// In the game's process (the plugin is loaded in it).
 pub unsafe fn locate() {
-    let found = (|| {
-        // SAFETY: no name: the game's own executable, mapped for the process's life.
-        let base = unsafe { GetModuleHandleW(None) }.ok()?.0 as usize;
+    #[cfg(windows)]
+    // SAFETY: no name: the game's own executable, mapped for the process's life; `find` reads it as mapped.
+    let found = unsafe { GetModuleHandleW(None) }.ok().map(|module| module.0 as usize).and_then(|base| {
         // SAFETY: `base` is the game's executable, as mapped.
-        let image = unsafe { Image::of(base) }?;
-        let writer = image.unique_masked(WRITER)?;
-        let reader = image.unique_masked(READER)?;
-        // Each RIP-relative address: the displacement at `at`, from the end of its instruction.
-        // SAFETY: `at` is within an instruction the patterns matched, in the game's code.
-        let target =
-            |at: usize| (at + 4).wrapping_add_signed(i32::from_le_bytes(unsafe { *(at as *const [u8; 4]) }) as isize);
-        let position = target(writer + 14);
-        let agree = target(writer + 20) == position + 8
-            && target(reader + 4) == position
-            && target(reader + 16) == position + 4
-            && target(reader + 24) == position + 8;
-        agree.then(|| {
-            log!("camera: found at +{:#x}", position - base);
-            position
-        })
-    })();
+        unsafe { find(base) }.map(|position| (base, position))
+    });
+    #[cfg(target_os = "macos")]
+    // SAFETY: image 0 is the process's executable, loaded for its life.
+    let found = unsafe { Image::of(crate::navigation::image_header()) }
+        .and_then(|image| find(&image).map(|position| (image.base, position)));
+    let found = found.map(|(base, position)| {
+        log!("camera: found at +{:#x}", position - base);
+        position
+    });
     if found.is_none() {
         log!("camera: the game's camera code isn't the version WestPlay knows; the camera isn't known");
     }
@@ -116,4 +222,20 @@ pub fn position() -> Option<[f32; 3]> {
     // SAFETY: a static of the game's executable (found by `locate`), mapped as long as the game runs; read as
     // it lies.
     (at != 0).then(|| unsafe { (at as *const [f32; 3]).read_unaligned() })
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    /// The camera found in the Mac game's executable named by `WESTPLAY_MAC_GAME` (1.57.2.7s: at `+0x29A8828`, read
+    /// 2026-11-03).
+    #[test]
+    #[ignore = "needs the Mac game's executable: WESTPLAY_MAC_GAME"]
+    fn finds_the_camera_in_the_mac_game() {
+        let file = crate::navigation::mac_game();
+        // SAFETY: the executable's bytes, laid out as loaded for its `__TEXT`, alive through the test.
+        let image = unsafe { Image::of(file.as_ptr() as usize) }.expect("the image isn't read");
+        assert_eq!(find(&image).map(|position| position - image.base), Some(0x29a8828));
+    }
 }
