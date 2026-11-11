@@ -457,6 +457,9 @@ pub(crate) struct Layer {
     pub height: u32,
     pub scale: f32,
     pub shown: bool,
+    /// When the host last did anything to the WebView (input, a message, a load, a move): its page may have
+    /// changed, which the capture looks for sooner than it would of a page left alone.
+    pub poked: std::time::Instant,
 }
 
 /// What the stage and its WebViews share with the capture.
@@ -544,7 +547,17 @@ impl Stage {
         let (width, height) = view.size.get();
         // Hidden before it was added (a player, until the cabin shows it): it stays hidden.
         let shown = view.shown.get();
-        let layer = Layer { id: view.id, view: view.view.clone(), x: 0.0, y: 0.0, width, height, scale: 1.0, shown };
+        let layer = Layer {
+            id: view.id,
+            view: view.view.clone(),
+            x: 0.0,
+            y: 0.0,
+            width,
+            height,
+            scale: 1.0,
+            shown,
+            poked: std::time::Instant::now(),
+        };
         if on_top {
             layers.push(layer)
         } else {
@@ -682,6 +695,7 @@ impl OffscreenWebView {
         }
         if let Some(layer) = lock(&self.stage.layers).iter_mut().find(|layer| layer.id == self.id) {
             (layer.x, layer.y, layer.width, layer.height, layer.scale) = (x, y, width, height, scale);
+            layer.poked = std::time::Instant::now();
         }
         Ok(())
     }
@@ -796,6 +810,7 @@ impl OffscreenWebView {
         self.shown.set(shown);
         if let Some(layer) = lock(&self.stage.layers).iter_mut().find(|layer| layer.id == self.id) {
             layer.shown = shown;
+            layer.poked = std::time::Instant::now();
         }
         Ok(())
     }
@@ -912,7 +927,11 @@ impl OffscreenWebView {
 
     /// Messages the page posted since the last call, oldest first.
     pub fn take_page_messages(&self) -> Vec<String> {
-        std::mem::take(&mut lock(&self.inbox).messages)
+        let messages = std::mem::take(&mut lock(&self.inbox).messages);
+        if !messages.is_empty() {
+            self.poke();
+        }
+        messages
     }
 
     /// Posts `json` to the page, as WebView2's `PostWebMessageAsJson`: its `message` event's `data`.
@@ -931,8 +950,16 @@ impl OffscreenWebView {
         Ok(())
     }
 
+    /// Notes that the page may have changed (see `Layer::poked`).
+    fn poke(&self) {
+        if let Some(layer) = lock(&self.stage.layers).iter_mut().find(|layer| layer.id == self.id) {
+            layer.poked = std::time::Instant::now();
+        }
+    }
+
     /// Runs `work` with the WebView, on the main thread, and waits for it.
     fn on_view<R: Send>(&self, work: impl FnOnce(&WKWebView) -> R + Send) -> R {
+        self.poke();
         let view = &self.view;
         run_on_main(move |mtm| work(view.get(mtm)))
     }

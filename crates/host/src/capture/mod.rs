@@ -18,7 +18,11 @@ pub use self::macos::Capture;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Frames per second published to the game. Chromium renders at the monitor's refresh rate.
+/// Frames per second published to the game. Chromium renders at the monitor's refresh rate; on macOS each frame is
+/// a round of snapshots composited and compared on the main thread, and the game takes 30-40 a second at most.
+#[cfg(target_os = "macos")]
+pub const MAX_FPS: u32 = 30;
+#[cfg(not(target_os = "macos"))]
 pub const MAX_FPS: u32 = 60;
 const FRAME_INTERVAL: Duration = Duration::from_micros(1_000_000 / MAX_FPS as u64);
 /// Tolerance for capture timing jitter.
@@ -151,7 +155,7 @@ mod tests {
         let mailbox = Mailbox::new(start);
         mailbox.put(0);
         flush(&mailbox, start, |_| true);
-        // A 75 Hz stream: frames go out on the 60 Hz grid.
+        // A 75 Hz stream: frames go out on the grid of `MAX_FPS`.
         let mut published = 0;
         for i in 1..=75u32 {
             let now = start + Duration::from_micros(1_000_000 / 75 * u64::from(i));
@@ -160,7 +164,7 @@ mod tests {
                 published += 1;
             }
         }
-        assert!((58..=60).contains(&published), "{published} in a second");
+        assert!((MAX_FPS - 2..=MAX_FPS).contains(&published), "{published} in a second");
         // Idle for a while: the next frame goes out at once, the one after a full interval later.
         let later = start + Duration::from_secs(3);
         mailbox.put(100);

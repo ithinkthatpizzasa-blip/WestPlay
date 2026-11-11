@@ -7,27 +7,32 @@
 //! holds the last frame for a game that starts, and the frame block holds it only until it's taken. The cursor is drawn here, over each frame as it goes out
 //! (`cursor::paint`), and over the last again as it moves.
 //!
+//! A WebView whose page was the same in its last two snapshots isn't snapshotted again until the host does something
+//! to it, or [`QUIET_RECHECK`] has passed: the cabin page at rest costs next to nothing beside a video player that
+//! plays. A round with no snapshot due leaves the last frame as it was.
+//!
 //! Threads: snapshots are taken and composited on the main thread (WebKit's), one round at a time, each round's
 //! frame left in the [`Mailbox`]; the host's loop starts the rounds and publishes what's due ([`Capture::flush`]).
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use block2::RcBlock;
-use dispatch2::DispatchQueue;
+use dispatch2::{DispatchQueue, MainThreadBound};
 use objc2::MainThreadMarker;
 use objc2::rc::Retained;
 use objc2_app_kit::NSImage;
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_core_graphics::{
-    CGBitmapContextCreate, CGColorSpace, CGContext, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo,
+    CGBitmapContextCreate, CGColorSpace, CGContext, CGDataProvider, CGImage, CGImageAlphaInfo, CGImageByteOrderInfo,
     CGInterpolationQuality, kCGColorSpaceSRGB,
 };
 use objc2_foundation::{NSError, NSNumber};
-use objc2_web_kit::WKSnapshotConfiguration;
+use objc2_web_kit::{WKSnapshotConfiguration, WKWebView};
 use westplay_shared::BridgeMapping;
 use westplay_shared::frames::{FrameWriter, FramesMapping};
 
@@ -160,6 +165,10 @@ impl Capture {
             // SAFETY: the main queue's work runs on the main thread.
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             snapshot_round(&stage, mtm, move |frame| {
+                let Some(frame) = frame else {
+                    in_round.store(false, Ordering::Release);
+                    return;
+                };
                 let mut last = last.lock().unwrap_or_else(|e| e.into_inner());
                 if last.as_ref().is_none_or(|before| **before != *frame) {
                     let frame = Arc::new(frame);
@@ -179,12 +188,63 @@ struct Shot {
     image: Option<Retained<CGImage>>,
 }
 
-/// Snapshots every WebView shown on `stage`, then gives `done` their composite (on the main thread).
-fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(Vec<u8>) + 'static) {
+/// A WebView's last snapshot, kept for the rounds in which its page looks to be at rest.
+struct Cached {
+    image: Option<Retained<CGImage>>,
+    /// A digest of the snapshot's pixels, to tell whether the next differs.
+    hash: u64,
+    /// When it was taken.
+    at: Instant,
+    /// Whether the page changed from the snapshot before: such a page is snapshotted every round.
+    active: bool,
+    /// Where it was drawn on the frame.
+    rect: CGRect,
+}
+
+/// How long a WebView whose page was at rest goes without a new snapshot (a page that starts moving of itself,
+/// a CSS animation, is seen within this).
+const QUIET_RECHECK: Duration = Duration::from_millis(250);
+/// How long after the host last did something to a WebView (input, a message, a load) it's snapshotted every round.
+const POKE_HOLD: Duration = Duration::from_millis(1000);
+
+thread_local! {
+    /// The main thread's snapshots, by WebView.
+    static CACHE: RefCell<HashMap<u64, Cached>> = RefCell::new(HashMap::new());
+}
+
+/// A digest of an image's pixels (`None` if they can't be read).
+fn hash_image(image: &CGImage) -> Option<u64> {
+    let provider = CGImage::data_provider(Some(image))?;
+    let data = CGDataProvider::data(Some(&provider))?;
+    // SAFETY: the data's bytes, alive as long as `data` is.
+    let bytes = unsafe { data.as_bytes_unchecked() };
+    let mut hash = 0xcbf2_9ce4_8422_2325u64 ^ bytes.len() as u64;
+    let (words, rest) = bytes.as_chunks::<8>();
+    for word in words {
+        hash = (hash.rotate_left(5) ^ u64::from_le_bytes(*word)).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+    for &byte in rest {
+        hash = (hash.rotate_left(5) ^ u64::from(byte)).wrapping_mul(0x517c_c1b7_2722_0a95);
+    }
+    Some(hash)
+}
+
+/// One WebView shown on the stage, as a round sees it.
+struct Layer {
+    id: u64,
+    view: Arc<MainThreadBound<Retained<WKWebView>>>,
+    page_width: u32,
+    rect: CGRect,
+    poked: Instant,
+}
+
+/// Snapshots the WebViews shown on `stage` whose pages may have changed (the rest are taken from the last round),
+/// then gives `done` their composite (on the main thread), or `None` if nothing in the frame can have changed.
+fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(Option<Vec<u8>>) + 'static) {
     let (width, height) = stage.frame;
     let page_height = stage.page.lock().unwrap_or_else(|e| e.into_inner()).1.max(1);
     let squeeze = f64::from(height) / f64::from(page_height);
-    let layers: Vec<_> = {
+    let layers: Vec<Layer> = {
         let layers = stage.layers.lock().unwrap_or_else(|e| e.into_inner());
         layers
             .iter()
@@ -198,36 +258,84 @@ fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(
                     CGPoint::new(f64::from(layer.x), f64::from(height) - y - h * squeeze),
                     CGSize::new(w, h * squeeze),
                 );
-                (layer.view.clone(), layer.width, rect)
+                Layer { id: layer.id, view: layer.view.clone(), page_width: layer.width, rect, poked: layer.poked }
             })
             .collect()
     };
-    let shots: Rc<RefCell<Vec<Shot>>> =
-        Rc::new(RefCell::new(layers.iter().map(|(_, _, rect)| Shot { rect: *rect, image: None }).collect()));
-    let left = Rc::new(Cell::new(layers.len()));
+    let now = Instant::now();
+    // Which need a new snapshot; and whether the frame needs drawing again anyway (a WebView gone or moved).
+    let mut redraw = false;
+    let mut shots = Vec::with_capacity(layers.len());
+    let stale: Vec<bool> = CACHE.with_borrow_mut(|cache| {
+        let before = cache.len();
+        cache.retain(|id, _| layers.iter().any(|layer| layer.id == *id));
+        redraw |= cache.len() != before;
+        layers
+            .iter()
+            .map(|layer| {
+                let Some(cached) = cache.get_mut(&layer.id) else {
+                    shots.push(Shot { rect: layer.rect, image: None });
+                    return true;
+                };
+                if cached.rect != layer.rect {
+                    cached.rect = layer.rect;
+                    redraw = true;
+                }
+                shots.push(Shot { rect: layer.rect, image: cached.image.clone() });
+                cached.image.is_none()
+                    || cached.active
+                    || layer.poked >= cached.at
+                    || now.saturating_duration_since(layer.poked) < POKE_HOLD
+                    || now.saturating_duration_since(cached.at) >= QUIET_RECHECK
+            })
+            .collect()
+    });
+    let left = stale.iter().filter(|&&stale| stale).count();
+    if left == 0 {
+        if redraw {
+            done(Some(composite(width, height, &shots)));
+        } else {
+            done(None);
+        }
+        return;
+    }
+    let shots = Rc::new(RefCell::new(shots));
+    let left = Rc::new(Cell::new(left));
     let done = Rc::new(RefCell::new(Some(done)));
     let finish = {
         let (shots, done) = (shots.clone(), done.clone());
         move || {
             if let Some(done) = done.borrow_mut().take() {
-                done(composite(width, height, &shots.borrow()));
+                done(Some(composite(width, height, &shots.borrow())));
             }
         }
     };
-    if layers.is_empty() {
-        finish();
-        return;
-    }
     let finish = Rc::new(finish);
-    for (index, (view, page_width, _)) in layers.into_iter().enumerate() {
+    for (index, layer) in layers.into_iter().enumerate().filter(|(index, _)| stale[*index]) {
         let (shots, left, finish) = (shots.clone(), left.clone(), finish.clone());
+        let (id, rect, page_width) = (layer.id, layer.rect, layer.page_width);
         let block = RcBlock::new(move |image: *mut NSImage, _error: *mut NSError| {
             // SAFETY: WebKit's image (or none), alive through the call.
-            if let Some(image) = unsafe { image.as_ref() } {
+            let cg = unsafe { image.as_ref() }.and_then(|image| {
                 // SAFETY: AppKit's own call on its image; no rectangle, context or hints: the image's whole.
-                let cg = unsafe { image.CGImageForProposedRect_context_hints(std::ptr::null_mut(), None, None) };
-                shots.borrow_mut()[index].image = cg;
-            }
+                unsafe { image.CGImageForProposedRect_context_hints(std::ptr::null_mut(), None, None) }
+            });
+            let hash = cg.as_deref().and_then(hash_image);
+            let kept = CACHE.with_borrow_mut(|cache| {
+                let before = cache.remove(&id);
+                // A page that differs from its last snapshot (or that can't be told) stays in the rounds.
+                let active = match (&before, hash) {
+                    (Some(before), Some(hash)) => before.hash != hash,
+                    _ => true,
+                };
+                let image = cg.or(before.and_then(|before| before.image));
+                cache.insert(
+                    id,
+                    Cached { image: image.clone(), hash: hash.unwrap_or(0), at: Instant::now(), active, rect },
+                );
+                image
+            });
+            shots.borrow_mut()[index].image = kept;
             left.set(left.get() - 1);
             if left.get() == 0 {
                 finish();
@@ -239,7 +347,7 @@ fn snapshot_round(stage: &StageShared, mtm: MainThreadMarker, done: impl FnOnce(
             let config = WKSnapshotConfiguration::new(mtm);
             // In points, which are the page's pixels: the WebViews draw at 1x (`webview::macos::draw_at_1x`).
             config.setSnapshotWidth(Some(&NSNumber::new_f64(f64::from(page_width))));
-            view.get(mtm).takeSnapshotWithConfiguration_completionHandler(Some(&config), &block);
+            layer.view.get(mtm).takeSnapshotWithConfiguration_completionHandler(Some(&config), &block);
         }
     }
 }
