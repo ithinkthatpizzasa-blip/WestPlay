@@ -3,6 +3,15 @@
 What changed in each release of WestPlay. The newest release's notes are what the app shows when it offers the
 update.
 
+## Unreleased
+- WestPlay runs on the Mac: Euro Truck Simulator 2 from Steam (the Mac game, 1.57) on macOS 14 or later, Apple
+  silicon and Intel alike. The companion comes as a `.dmg`: drag WestPlay to Applications, and as on Windows it
+  finds your game, puts in the plugin and builds your map. It updates itself on the Mac too.
+- On the Mac, Spotify and Apple Music play as the screen's own sound, not from the cab's speakers: their songs are
+  protected, and macOS's web engine gives WestPlay nothing of their sound to place in the cab. YouTube and YouTube
+  Music play from the speakers, as on Windows.
+- WestPlay says "computer" where it said "PC", in the companion and on the truck's screen, in every language.
+
 ## 2.1.4 (2026-10-28)
 - The cursor on WestPlay's screen stays where you left it when you let go of the interaction key, and fades away
   five seconds after you last moved it, as it does when you stop moving it: it went the moment you let go.

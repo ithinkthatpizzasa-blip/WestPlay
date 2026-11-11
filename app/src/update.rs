@@ -4,7 +4,8 @@
 //! hours after, and when the companion asks (its About page). One found is offered in the companion
 //! (`update-found`), with its notes (the changelog's), and installed only when the player says so
 //! ([`install_update`]), with the game closed: downloaded (`update-progress`), checked, and then Windows'
-//! installer runs on its own, without questions, and starts WestPlay again.
+//! installer runs on its own, without questions, and starts WestPlay again. On macOS the new WestPlay.app (the
+//! release's `WestPlay.app.tar.gz`) takes the old one's place, and WestPlay starts again from it.
 //!
 //! The plugin and the mod in the game are the new WestPlay's once it's started again: the companion puts
 //! them in (setup's `updated`).
@@ -123,8 +124,9 @@ pub async fn look_for_update(app: AppHandle) -> Option<Offer> {
 }
 
 /// Installs the update found: downloaded, its signature checked, then Windows' installer runs, and WestPlay
-/// quits for it (the installer starts it again). Only with the game closed: the plugin the game loaded is
-/// the old WestPlay's. Comes back only if it couldn't be installed.
+/// quits for it (the installer starts it again); on macOS the new app is put in place of this one, which then
+/// starts again as it. Only with the game closed: the plugin the game loaded is the old WestPlay's. Comes back
+/// only if it couldn't be installed.
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<(), String> {
     if westplay_setup::game::running() {
@@ -156,5 +158,12 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     update.install(bytes).map_err(|error| {
         log!("[update] couldn't install it: {error}");
         error.to_string()
-    })
+    })?;
+    // Windows' installer has quit WestPlay by now. macOS's update only replaced the app's files: this one, still
+    // the old WestPlay, is started again from them.
+    if cfg!(target_os = "macos") {
+        crate::stop_host(&app);
+        app.restart();
+    }
+    Ok(())
 }

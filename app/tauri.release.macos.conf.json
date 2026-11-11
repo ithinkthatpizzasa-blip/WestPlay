@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "createUpdaterArtifacts": true,
+    "resources": {
+      "../target/release/westplay.dylib": "westplay.dylib",
+      "../LICENSE": "LICENSE.txt",
+      "../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md",
+      "../THIRD_PARTY_LICENSES.md": "THIRD_PARTY_LICENSES.md"
+    },
+    "macOS": {
+      "minimumSystemVersion": "14.0",
+      "signingIdentity": "-",
+      "hardenedRuntime": true
+    }
+  }
+}
