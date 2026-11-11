@@ -544,7 +544,7 @@ On macOS a texture is known by its name: the first time the game binds one, its 
 Each time a screen texture is bound and a newer app frame is there, it's written in through the game's own context,
 the context's unpacking state (unpack buffer, alignment, row length, skips) set for it and put back after.
 
-Not on macOS yet: what finds the game's own code (`camera`, `mod_mount`, `navigation`: 3d). TruckersMP's part is Windows only (no Mac client, Phase 0).
+What finds the game's own code (`camera`, `mod_mount`, `navigation`, and the host's weather): 3d, below. TruckersMP's part is Windows only (no Mac client, Phase 0).
 
 ### Checked without the game (`tools/macos_probe/bridge_peer`'s `harness`)
 
@@ -683,13 +683,41 @@ game's folder (the app's setup chooses it otherwise, not run on this Mac yet).
   mounted.`, and the game ran on; the cab wasn't reached. The owner keeps the screen mod in the game's `mod` folder,
   switched on in the Mod Manager (taking it out showed it missing there, and isn't wanted): with it there the plugin
   mounts nothing (two copies stop the game), so nothing changes for them.
-- `camera`: no `subss` triple like Windows'; Apple's compiler writes and reads it otherwise. To be found by probing
-  the running game's memory (now possible, through the plugin).
-- The weather (`weather.rs`) still looks for Windows' code shape: not found on the Mac. 1.57 registers the save's
-  `stored_weather_change_timer` (a float) at `+0x4C4` and `stored_current_weather` at `+0x4C8` of the economy unit,
-  but no code copies them in as 1.61's does (its save serialises the unit by that field table): the live weather
-  object is still to be found (by watching the memory as the weather turns, through the plugin).
+- `camera` and the weather: done (below).
 - Units: the cabin writes km always (on Windows too); the owner's game is in miles.
+
+### The weather and the camera (2026-11-03)
+
+**The weather (host, `weather.rs`).** 1.57 has no code copying the weather into the save's economy unit (1.61's
+shape, which Windows looks for). Found by its console command instead: `g_set_weather`'s handler (its usage string,
+"<weather_index> [i|f]") takes the index modulo 2 and hands `[core + 0x7F0]` (the same core global as the
+navigator's, `+0x26DB3E0`) to the code that sets it. That code, set at once, writes the weather to `+0x3E48` and
+`+0x3E4C` (set to turn, `+0x3E4C` alone: the target), and the wetness (`+0x45C0`: 1.0 for rain at once, 0 clear);
+the game's snapshot of its weather (a backup it restores from) copies both weathers as one, then the wetness, the
+changing state (`+0x454C`) and the timer (`+0x4548`, seconds: "[env] Regular weather … weather %.1fmin" logs it
+divided by 60). Found by those three shapes (`locate_mac`), each once, agreeing on the weathers; a test runs it on
+the game's executable (`WESTPLAY_MAC_GAME`).
+
+Seen in the game (owner, ProMods profile): "weather: Clear, turning to Clear", roads 0% wet, and the cabin's weather
+clear, as the sky was. The timer read 31,536,000 (a year, exactly) and didn't fall: no change was coming, so "next
+change in" stays unknown (the reader leaves out a timer over 10⁶). Rain wasn't seen (no way to make it without the
+game's console); it's the same fields `g_set_weather 1` writes.
+
+**The camera (plugin, `camera.rs`).** Found by watching the game's memory (a probe in the plugin, not kept: every
+writable range scanned, 17.6 GB in 36 s, for three floats within 25 m of the truck, then followed): as the owner
+went from the cab to the chase camera, one static moved from 3.3 m to 20.9 m from the truck: `+0x29A8828`, three
+floats, the camera's world position, as on Windows (in the cab it's the driver's head, 0.001 m from where the SDK
+puts it). Its writer copies it from the stack, z first (`mov eax, [rbp+s+8]; mov [X+8], eax; mov rax, [rbp+s];
+mov [X], rax`); two readers take y and z as one (`movsd xmm, [X+4]; subps; mulps`: a distance squared). Each once in
+the code, agreeing: the plugin logs "camera: found at +0x29a8828". (A static at `+0x37EEBD8`, subtracted from
+positions too, isn't it: `[0, 0.3, 0]`, set once at start.)
+
+Seen in the game (owner): the host's "camera: outside the cab, 21.6 m from the driver's head" with the chase camera,
+26.0 m with the top-down one (26 m above), back in the cab 0.0006 m. Twice the log said 0.0 m as the camera left
+the cab (the moment it counts as outside may come a frame before the game moves it); the distance the players get is
+taken again every pass, so it's right a frame later. YouTube's sound didn't change with the camera outside (owner),
+though the host said so: not looked into yet (the cab's speakers, `cab_sound.js`, were never checked in the Mac game:
+a truck whose speakers aren't known plays its sound as it is).
 
 ### The video's frame rate in the cabin (2026-11-02)
 

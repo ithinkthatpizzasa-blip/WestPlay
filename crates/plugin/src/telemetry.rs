@@ -221,7 +221,7 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
                 if let Some(bridge) = bridge::get() {
                     let [x, y, z] = *HEAD_DEFAULT.lock().unwrap_or_else(|e| e.into_inner());
                     let [cabin_x, cabin_y, cabin_z] = *CABIN.lock().unwrap_or_else(|e| e.into_inner());
-                    let camera = camera_position();
+                    let camera = crate::camera::position();
                     let [camera_x, camera_y, camera_z] = camera.unwrap_or_default();
                     let published = Telemetry {
                         head_x: snapshot.head_x + x,
@@ -248,15 +248,6 @@ unsafe fn on_game_event(event: u32, info: *const c_void) {
             _ => {}
         }
     }
-}
-
-/// Where the game's camera is, if known.
-fn camera_position() -> Option<[f32; 3]> {
-    #[cfg(windows)]
-    return crate::camera::position();
-    // The Mac game's camera isn't found yet (docs/MACOS_PORT.md).
-    #[cfg(not(windows))]
-    None
 }
 
 /// Publishes what the game (re)configures: the truck's identity and the player's job. An empty attribute set

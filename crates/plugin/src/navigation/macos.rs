@@ -181,6 +181,26 @@ unsafe extern "C" {
     fn _dyld_get_image_header(index: u32) -> *const c_void;
 }
 
+/// Where the game's executable (image 0) is loaded: its Mach-O header.
+pub(crate) fn image_header() -> usize {
+    // SAFETY: a plain query: image 0 is the process's executable, loaded for its life.
+    unsafe { _dyld_get_image_header(0) as usize }
+}
+
+/// The Mac game's executable named by `WESTPLAY_MAC_GAME`, its x86_64 part (of a universal file). Its `__TEXT` starts
+/// the file, so its bytes there lie as loaded.
+#[cfg(test)]
+pub(crate) fn mac_game() -> Vec<u8> {
+    let file = std::fs::read(std::env::var("WESTPLAY_MAC_GAME").expect("WESTPLAY_MAC_GAME")).unwrap();
+    let be = |at: usize| u32::from_be_bytes(file[at..at + 4].try_into().unwrap()) as usize;
+    if be(0) == 0xcafe_babe {
+        let arch = (0..be(4)).map(|i| 8 + i * 20).find(|&at| be(at) == 0x0100_0007).unwrap();
+        file[be(arch + 8)..be(arch + 8) + be(arch + 12)].to_vec()
+    } else {
+        file
+    }
+}
+
 /// Finds the pieces in the running game's code; `None` (logged) if any isn't there exactly once.
 ///
 /// # Safety
@@ -188,7 +208,7 @@ unsafe extern "C" {
 pub unsafe fn locate() -> Option<Game> {
     let found = (|| {
         // SAFETY: image 0 is the process's executable, loaded for its life.
-        let image = unsafe { Image::of(_dyld_get_image_header(0) as usize) }?;
+        let image = unsafe { Image::of(image_header()) }?;
         let (core, navigator) = image.navigator()?;
         let set_targets = image.unique(&SET_TARGETS.iter().map(|&b| Some(b)).collect::<Vec<_>>())?;
         let find_node = image.unique(FIND_NODE)?;
@@ -334,19 +354,11 @@ mod tests {
 
     /// The Mac game's pieces found in its executable named by `WESTPLAY_MAC_GAME` (1.57.2.7s: the core's global at
     /// `+0x26DB3E0`, the navigator at `+0x3C38`, "set targets" at `+0x7146A0`, the node lookup at `+0x69EE30`, read
-    /// 2026-11-02). Its `__TEXT` starts its file, so its bytes there lie as loaded.
+    /// 2026-11-02).
     #[test]
     #[ignore = "needs the Mac game's executable: WESTPLAY_MAC_GAME"]
     fn finds_the_pieces_in_the_mac_game() {
-        let file = std::fs::read(std::env::var("WESTPLAY_MAC_GAME").expect("WESTPLAY_MAC_GAME")).unwrap();
-        let be = |at: usize| u32::from_be_bytes(file[at..at + 4].try_into().unwrap()) as usize;
-        // Its x86_64 part, of a universal file.
-        let image = if be(0) == 0xcafe_babe {
-            let arch = (0..be(4)).map(|i| 8 + i * 20).find(|&at| be(at) == 0x0100_0007).unwrap();
-            file[be(arch + 8)..be(arch + 8) + be(arch + 12)].to_vec()
-        } else {
-            file
-        };
+        let image = mac_game();
         // SAFETY: the executable's bytes, laid out as loaded for its `__TEXT`, alive through the test.
         let image = unsafe { Image::of(image.as_ptr() as usize) }.expect("the image isn't read");
         let (core, navigator) = image.navigator().expect("no navigator");

@@ -1413,9 +1413,13 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
             let game_frame = plugin.heartbeat.load(Ordering::Acquire);
             let (electrics, paused) = (telemetry.electric_enabled, telemetry.paused);
             let outside = camera.outside(truck.id.as_str(), cab_drawn, game_frame, electrics, paused);
+            let distance = camera::Camera::distance(telemetry, outside);
             if outside != was_outside {
                 was_outside = outside;
-                log!("camera: {} the cab", if outside { "outside" } else { "in" });
+                match distance {
+                    Some(metres) => log!("camera: outside the cab, {metres:.1} m from the driver's head"),
+                    None => log!("camera: {} the cab", if outside { "outside" } else { "in" }),
+                }
             }
             // The game's menu gone while it's still paused: the music back as its still picture shows.
             let gone = menu.update(paused, camera::drawn(cab_drawn, game_frame), outside);
@@ -1426,7 +1430,7 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
                 }
                 let _ = webview.post_json(&serde_json::json!({ "type": "menuGone", "gone": gone }).to_string());
             }
-            let distance = camera::Camera::distance(telemetry, outside).unwrap_or(0.0) as f32;
+            let distance = distance.unwrap_or(0.0) as f32;
             let turn = game_settings.camera().steering_turn(telemetry.steering);
             let head = speakers::Head::of(telemetry).turned(turn);
             // The truck's speakers: its parts' for a truck whose speakers come with them (none until they're
