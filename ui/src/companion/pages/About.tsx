@@ -3,6 +3,7 @@ import { appVersion } from '../bridge'
 import { Button, Group, Panel, Row } from '../room/parts'
 import { banner } from '../room/room'
 import { GLOW, useScreenAt } from '../room/screen'
+import { SYSTEM } from '../system'
 import { lookForUpdate } from '../update'
 import { appLogPlace, type HostStatus } from '../useHostStatus'
 import { type PageProps, screenState } from './page'
@@ -10,11 +11,15 @@ import { type PageProps, screenState } from './page'
 /** How long the screen says the report was copied. */
 const COPIED_MS = 3200
 
+/** Where the plugin writes its log: WestPlay's folder in Documents, on the Mac in Application Support. */
+const PLUGIN_LOG =
+  SYSTEM === 'mac' ? '~/Library/Application Support/WestPlay/logs/plugin.log' : 'Documents\\WestPlay\\logs\\plugin.log'
+
 /**
  * WestPlay itself: its version and whether there's an update (looked for as the page opens; one found opens
  * its sheet), and the live details of WestPlay and the game for when something isn't
  * right, with a report of them to copy for whoever helps, and where the logs are (app.log in WestPlay's own
- * folder where Documents refused it). On the room's screen, the Dashboard; a banner says when the report's
+ * folder where Documents refused it; on the Mac, both in Application Support). On the room's screen, the Dashboard; a banner says when the report's
  * copied.
  */
 export function About({ status, setup, cw, update, showUpdate }: PageProps) {
@@ -80,12 +85,18 @@ export function About({ status, setup, cw, update, showUpdate }: PageProps) {
         <Row title={w.dropped} value={status ? String(status.droppedTotal) : '—'} />
         <Row title={w.cabGpu} detail={status?.cabAdapter ?? '—'} />
         <Row title={w.gameGpu} detail={status?.gameAdapter ?? w.waitingForGame} />
-        <Row title={w.webview} value={status?.webviewVersion || '—'} />
-        <Row title={w.log} detail="Documents\WestPlay\logs\plugin.log" />
+        <Row title={w.webview} value={webview(status?.webviewVersion)} />
+        <Row title={w.log} detail={PLUGIN_LOG} />
         <Row title={w.appLog} detail={appLog ?? '—'} />
       </Group>
     </Panel>
   )
+}
+
+/** The WebView's version: WebView2's number; on the Mac, "WebKit (Safari 26.0)" under WebKit's title is Safari's. */
+function webview(version: string | undefined): string {
+  if (!version) return '—'
+  return version.replace(/^WebKit \((.*)\)$/, '$1')
 }
 
 /** The report to copy: plain facts, in English (for whoever helps), nothing of the player's accounts. */
@@ -107,9 +118,9 @@ function report(
     `GPU: ${status?.cabAdapter ?? '—'} (game: ${status?.gameAdapter ?? '—'}; all: ${
       status?.adapters.map((adapter) => adapter.name).join(', ') || '—'
     })`,
-    `WebView2: ${status?.webviewVersion || '—'}`,
+    `${SYSTEM === 'mac' ? 'WebView' : 'WebView2'}: ${status?.webviewVersion || '—'}`,
     `Map: ${status?.map.state ?? 'unknown'}`,
     `App log: ${appLog ?? 'not written'}`,
-    `Windows: ${navigator.userAgent}`,
+    `${SYSTEM === 'mac' ? 'macOS' : 'Windows'}: ${navigator.userAgent}`,
   ].join('\n')
 }

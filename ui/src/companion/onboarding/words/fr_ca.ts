@@ -30,4 +30,12 @@ export const words: Words = {
     pluginFailed: 'Le plugiciel n’a pas pu être installé.',
     noPlugin: 'Il manque le plugiciel dans cette copie de WestPlay. Veuillez réinstaller WestPlay.',
   },
+  mac: {
+    ...france.mac,
+    inModManager:
+      'WestPlay ajoute un plugiciel à votre jeu et tient à jour ses écrans pour les camions dans son mod, westplay.scs, que vous avez activé dans le Gestionnaire de mods. Les fichiers du jeu lui-même restent intacts, et désinstaller WestPlay retire tout.',
+    needsAdministrator:
+      'Votre jeu se trouve dans un dossier protégé. macOS demandera votre mot de passe une seule fois, uniquement pour copier le plugiciel.',
+    declined: 'Le plugiciel ne peut pas être installé sans elle. Réessayez et entrez votre mot de passe.',
+  },
 }

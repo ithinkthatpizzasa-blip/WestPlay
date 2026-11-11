@@ -12,7 +12,12 @@ use crate::{places, platform, vdf};
 pub const STEAM_APP: &str = "227300";
 /// The game versions WestPlay has been tried with. Others may well work (the plugin finds what it needs in
 /// the game by its shape), but haven't been tried.
+#[cfg(not(target_os = "macos"))]
 pub const TESTED_VERSIONS: &str = "1.61.*";
+/// The game versions WestPlay has been tried with: the Mac game is still 1.57 (docs/MACOS_PORT.md, Phase 0), and
+/// WestPlay's port was made and tried with it.
+#[cfg(target_os = "macos")]
+pub const TESTED_VERSIONS: &str = "1.57.*";
 
 /// An install of the game.
 #[derive(Clone, Debug, PartialEq)]
@@ -201,7 +206,11 @@ mod tests {
     #[test]
     fn tells_a_tested_version() {
         let game = |version| Game { dir: PathBuf::new(), found_by: FoundBy::Steam, version, dlcs: vec![] };
-        assert!(game(Some(Version([1, 61, 1, 9]))).tested());
+        // Each system's own game: Windows' 1.61, the Mac's 1.57.
+        let (tested, other) =
+            if cfg!(target_os = "macos") { ([1, 57, 2, 7], [1, 61, 1, 9]) } else { ([1, 61, 1, 9], [1, 57, 2, 7]) };
+        assert!(game(Some(Version(tested))).tested());
+        assert!(!game(Some(Version(other))).tested());
         assert!(!game(Some(Version([1, 62, 0, 1]))).tested());
         assert!(!game(None).tested());
     }

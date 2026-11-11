@@ -309,4 +309,12 @@ export const words: CompanionWords = {
     button: 'Toeta Kreosuses',
     note: 'Avab Kreosuse sinu brauseris.',
   },
+  mac: {
+    elevated: {
+      title: 'Mäng töötab teise kasutajana',
+      text: 'Siis ei näe WestPlay selle marsruuti, juhiseid ega ilma. Käivita mäng tavaliselt, oma kasutajana.',
+    },
+    uninstall: 'Eemalda parooliga',
+    finishUpdate: 'Uue WestPlay pistikprogramm läheb sinu mängu. macOS küsib sinu parooli nagu paigaldamisel.',
+  },
 }

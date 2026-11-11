@@ -311,4 +311,13 @@ export const words: CompanionWords = {
     button: 'Lagundu Kreosus-en',
     note: 'Kreosus zure arakatzailean irekitzen du.',
   },
+  mac: {
+    elevated: {
+      title: 'Jokoa beste erabiltzaile gisa exekutatzen ari da',
+      text: 'Horrela WestPlay-k ezin ditu haren ibilbidea, jarraibideak eta eguraldia ikusi. Abiarazi jokoa modu arruntean, zure erabiltzailearekin.',
+    },
+    uninstall: 'Desinstalatu pasahitzarekin',
+    finishUpdate:
+      'WestPlay berriaren plugina zure jokoan jartzen da. macOS-ek zure pasahitza eskatzen du, instalatzean bezala.',
+  },
 }

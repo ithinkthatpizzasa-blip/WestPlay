@@ -185,4 +185,15 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instalar con contraseña',
+    permission: 'macOS te pedirá la contraseña',
+    needsAdministrator:
+      'Tu juego está en una carpeta protegida. macOS te pedirá la contraseña una sola vez, solo para copiar el plugin.',
+    declined: 'Sin él no se puede instalar el plugin. Vuelve a intentarlo e introduce tu contraseña.',
+    noDocuments: 'No se ha encontrado tu carpeta Application Support.',
+    inModManager:
+      'WestPlay añade un plugin a tu juego y mantiene al día sus pantallas para los camiones en su mod, westplay.scs, que tienes activado en el Gestor de mods. Los archivos del propio juego no se tocan, y al desinstalar WestPlay se quita todo.',
+    keys: { leftAlt: 'Opción izquierda', rightCtrl: 'Control derecha', rightAlt: 'Opción derecha' },
+  },
 }

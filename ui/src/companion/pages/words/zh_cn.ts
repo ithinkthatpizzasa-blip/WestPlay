@@ -305,4 +305,12 @@ export const words: CompanionWords = {
     button: '在 Kreosus 上支持',
     note: '会在你的浏览器中打开 Kreosus。',
   },
+  mac: {
+    elevated: {
+      title: '游戏正以其他用户身份运行',
+      text: '这样 WestPlay 无法读取游戏的路线、导航和天气。请以你自己的用户身份正常启动游戏。',
+    },
+    uninstall: '输入密码以卸载',
+    finishUpdate: '新 WestPlay 的插件会放入你的游戏。和安装时一样，macOS 会要求输入密码。',
+  },
 }

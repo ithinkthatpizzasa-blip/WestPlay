@@ -14,6 +14,7 @@
 //! (`places::westplay_documents`), and WestPlay's plugin mounts it into the game itself, first of all mods, in
 //! every mode (single player, Convoy, TruckersMP). A copy in the game's `mod` folder is taken out
 //! (`uninstall::remove_mod`): with both, the game has the screens' scripts twice and stops when a screen starts.
+//! On macOS a copy the player keeps in the `mod` folder stays there and is made again in place ([`home`]).
 //!
 //! The mod is a zip, as `.scs` mods may be. (Ported from the Python script that built it before, and checked
 //! against it: the same patch byte for byte, and the same mod from the same game.)
@@ -29,6 +30,18 @@ use crate::cab_mark;
 
 /// The mod's file, in WestPlay's own folder (`places::westplay_documents`).
 pub const FILE_NAME: &str = "westplay.scs";
+
+/// The folder WestPlay's mod is kept in: WestPlay's own (`westplay`), which the plugin mounts it from. On macOS, the
+/// game's `mod` folder in `game_documents` instead when the player keeps it there, switched on in the Mod Manager
+/// (owner 2026-11-03: it stays there, never moved or taken out, and is made again in place; the plugin mounts
+/// nothing then). On Windows a copy there is WestPlay 1.2's, taken out as WestPlay installs.
+pub fn home(game_documents: Option<&Path>, westplay: &Path) -> PathBuf {
+    let mods = game_documents.map(|documents| documents.join("mod"));
+    match mods.filter(|mods| cfg!(target_os = "macos") && mods.join(FILE_NAME).is_file()) {
+        Some(mods) => mods,
+        None => westplay.to_path_buf(),
+    }
+}
 /// Where the mod's screen materials and textures live in the game's file system.
 const SCREEN_DIR: &str = "material/ui/westplay";
 /// The screen's draw order in its group: the stock elements use layers 0 to 3.
@@ -960,6 +973,20 @@ mod tests {
         std::fs::write(&blocked, b"").unwrap();
         let error = install(b"mod", &blocked.join("mod")).unwrap_err().to_string();
         assert!(error.starts_with("making the folder ") && error.contains("blocked"), "{error}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn the_mod_is_kept_where_the_player_keeps_it_on_the_mac() {
+        let root = std::env::temp_dir().join(format!("westplay-home-{}", std::process::id()));
+        let documents = root.join("Euro Truck Simulator 2");
+        let ours = root.join("WestPlay");
+        std::fs::create_dir_all(documents.join("mod")).unwrap();
+        assert_eq!(home(Some(&documents), &ours), ours);
+        assert_eq!(home(None, &ours), ours);
+        std::fs::write(documents.join("mod").join(FILE_NAME), b"mod").unwrap();
+        let expected = if cfg!(target_os = "macos") { documents.join("mod") } else { ours.clone() };
+        assert_eq!(home(Some(&documents), &ours), expected);
         let _ = std::fs::remove_dir_all(&root);
     }
 

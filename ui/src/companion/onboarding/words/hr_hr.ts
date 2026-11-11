@@ -185,4 +185,15 @@ export const words: Words = {
       },
     ],
   },
+  mac: {
+    asAdministrator: 'Instaliraj s lozinkom',
+    permission: 'macOS će zatražiti vašu lozinku',
+    needsAdministrator:
+      'Vaša je igra u zaštićenoj mapi. macOS će jednom zatražiti vašu lozinku, samo za kopiranje dodatka.',
+    declined: 'Bez njega se dodatak ne može instalirati. Pokušajte ponovno i unesite lozinku.',
+    noDocuments: 'Mapa Application Support nije pronađena.',
+    inModManager:
+      'WestPlay igri dodaje dodatak i svoje zaslone za kamione održava ažurnima u svom modu westplay.scs, koji imate uključen u Upravitelju modova. Datoteke same igre ostaju netaknute, a deinstaliranjem WestPlaya sve se uklanja.',
+    keys: { leftAlt: 'Lijevi Option', rightCtrl: 'Desni Control', rightAlt: 'Desni Option' },
+  },
 }

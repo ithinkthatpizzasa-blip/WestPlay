@@ -1,3 +1,4 @@
+import { SYSTEM } from '../../system'
 import type { MapStage } from '../../useHostStatus'
 import type { KeyPreset } from '../../useSettings'
 
@@ -10,6 +11,8 @@ import type { KeyPreset } from '../../useSettings'
  * (`mod_browser_t`, `sdk_warning`, `ok`).
  *
  * The translations other than English and Turkish were written without a native speaker's review yet.
+ *
+ * On macOS, what Windows' words name Windows' way is said the Mac's ([`MacWords`], [`onMac`]).
  */
 
 /** A note: its first words in bold, then the rest. Also a banner on the screen: its title, then a line. */
@@ -143,8 +146,9 @@ export interface Words {
   controls: {
     title: string
     sub: string
-    keys: Record<KeyPreset, string>
-    /** The keys' own labels, as on the language's keyboards. */
+    /** Right Alt's is the Mac's only (`mac.keys`). */
+    keys: Record<Exclude<KeyPreset, 'rightAlt'>, string> & { rightAlt?: string }
+    /** The keys' own labels, as on the language's PC keyboards (a Mac's: [`onMac`]). */
     alt: string
     ctrl: string
   }
@@ -177,6 +181,49 @@ export interface Words {
     title: string
     done: string
     steps: [Note, Note]
+  }
+  /** On macOS, in place of the words above that are Windows' ([`onMac`]). */
+  mac: MacWords
+}
+
+/**
+ * What macOS says its own way: the administrator's password it asks for (for a game in a folder an administrator
+ * owns) where Windows asks for permission, WestPlay's folder in Application Support where Windows' is in
+ * Documents, and the Mac's names for the keys (the plugin takes Alt for Option and Ctrl for Control).
+ */
+export interface MacWords {
+  /** `install.asAdministrator` */
+  asAdministrator: string
+  /** The line of the banner `install.banners.permission`. */
+  permission: string
+  /** The lines of the notes `install.needsAdministrator` and `install.declined` (their titles say it for both). */
+  needsAdministrator: string
+  declined: string
+  /** `install.noDocuments` */
+  noDocuments: string
+  /** The install step's line (in place of `install.sub`) when WestPlay's mod, westplay.scs, is kept in the game's
+   * `mod` folder, switched on in its Mod Manager (`GameCheck.modInModManager`, as the owner keeps it on the Mac):
+   * setup keeps that copy up to date, so there is something on in Mod Manager. */
+  inModManager: string
+  /** `controls.keys`' keys (their keycaps are the Mac's symbols, ⌥ and ⌃, on every Mac's keyboard), and right
+   * Option, which the Mac offers in place of Right Control (`offeredKeys`). */
+  keys: { leftAlt: string; rightCtrl: string; rightAlt: string }
+}
+
+/** `words` as the Mac says them: [`MacWords`] in place of Windows'. */
+export function onMac(words: Words): Words {
+  const { mac, install, controls } = words
+  return {
+    ...words,
+    install: {
+      ...install,
+      asAdministrator: mac.asAdministrator,
+      banners: { ...install.banners, permission: { ...install.banners.permission, text: mac.permission } },
+      needsAdministrator: { ...install.needsAdministrator, text: mac.needsAdministrator },
+      declined: { ...install.declined, text: mac.declined },
+      noDocuments: mac.noDocuments,
+    },
+    controls: { ...controls, keys: { ...controls.keys, ...mac.keys }, alt: '⌥', ctrl: '⌃' },
   }
 }
 
@@ -242,9 +289,15 @@ export function languageOf(tags: readonly string[]): string {
   return 'en_us'
 }
 
-/** The words in the game's language `code` (English for one without). */
+const ON_MAC = new Map<string, Words>()
+
+/** The words in the game's language `code` (English for one without), as the system says them ([`SYSTEM`]). */
 export function wordsFor(code: string): Words {
-  return WORDS[code] ?? WORDS.en_us
+  const words = WORDS[code] ?? WORDS.en_us
+  if (SYSTEM !== 'mac') return words
+  let mac = ON_MAC.get(code)
+  if (!mac) ON_MAC.set(code, (mac = onMac(words)))
+  return mac
 }
 
 /** The languages there are words for. */

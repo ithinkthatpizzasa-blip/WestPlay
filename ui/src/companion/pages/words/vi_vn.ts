@@ -311,4 +311,13 @@ export const words: CompanionWords = {
     button: 'Ủng hộ trên Kreosus',
     note: 'Mở Kreosus trong trình duyệt của bạn.',
   },
+  mac: {
+    elevated: {
+      title: 'Trò chơi đang chạy dưới người dùng khác',
+      text: 'Khi đó WestPlay không thấy được lộ trình, chỉ dẫn và thời tiết của trò chơi. Hãy khởi động trò chơi bình thường, bằng tài khoản của bạn.',
+    },
+    uninstall: 'Gỡ cài đặt bằng mật khẩu',
+    finishUpdate:
+      'Plugin của WestPlay mới được đưa vào trò chơi của bạn. macOS sẽ hỏi mật khẩu của bạn, như khi bạn cài đặt.',
+  },
 }

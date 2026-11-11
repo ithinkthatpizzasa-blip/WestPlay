@@ -22,4 +22,9 @@ export const words: Words = {
       polish.launch.steps[1],
     ],
   },
+  mac: {
+    ...polish.mac,
+    inModManager:
+      'WestPlay dodaje do gry wtyczkę i aktualizuje swoje ekrany dla ciężarówek w swoim modzie westplay.scs, który masz włączony w menu „Mynedżer modōw”. Pliki samej gry pozostają nietknięte, a odinstalowanie WestPlay usuwa wszystko.',
+  },
 }

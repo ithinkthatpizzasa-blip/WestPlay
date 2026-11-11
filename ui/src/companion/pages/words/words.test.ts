@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { languages } from '../../onboarding/words'
-import { companionLanguages, companionWords } from '.'
+import { companionLanguages, companionOnMac, companionWords } from '.'
 
 /** Every text in `words`, by its path. */
 function texts(value: unknown, path = ''): [string, string][] {
@@ -32,5 +32,21 @@ describe('the companion’s words', () => {
 
   it('falls back to English for a language the game doesn’t have', () => {
     expect(companionWords('xx_xx')).toBe(companionWords('en_us'))
+  })
+})
+
+describe('the companion’s words on the Mac', () => {
+  it.each(companionLanguages())('%s names nothing of Windows’, its own words in their place', (code) => {
+    const windows = companionWords(code)
+    const before = JSON.stringify(windows)
+    const words = companionOnMac(windows)
+    expect(JSON.stringify(windows)).toBe(before)
+    for (const [path, text] of texts({ ...words, mac: null })) {
+      expect(text, `${code} ${path}`).not.toMatch(/Windows|WebView2/)
+    }
+    expect(words.screen.elevated).toEqual(words.mac.elevated)
+    expect(words.uninstall.asAdministrator).toBe(words.mac.uninstall)
+    expect(words.update.finish.text).toBe(words.mac.finishUpdate)
+    expect(words.about.webview).toBe('WebKit')
   })
 })

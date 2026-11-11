@@ -304,4 +304,12 @@ export const words: CompanionWords = {
     button: 'Kreosus’ta destekle',
     note: 'Kreosus tarayıcında açılır.',
   },
+  mac: {
+    elevated: {
+      title: 'Oyun başka bir kullanıcı olarak çalışıyor',
+      text: 'Bu durumda WestPlay oyunun rotasını, yol tarifini ve havasını göremez. Oyunu kendi kullanıcınla, normal başlat.',
+    },
+    uninstall: 'Parolayla Kaldır',
+    finishUpdate: 'Yeni WestPlay’in eklentisi oyununa yerleştirilir. macOS, kurulumda olduğu gibi parolanı ister.',
+  },
 }

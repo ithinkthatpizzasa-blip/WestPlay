@@ -1,3 +1,5 @@
+import { SYSTEM } from '../../system'
+
 /**
  * The companion's own words, past the onboarding: its sections, their pages, the tutorial and the uninstall,
  * in each of the game's 43 languages (by the game's codes, as the onboarding's words), in the game's language
@@ -7,6 +9,8 @@
  * onboarding's words.
  *
  * The translations other than English and Turkish were written without a native speaker's review yet.
+ *
+ * On macOS, what Windows' words name Windows' way is said the Mac's ([`CompanionMacWords`], [`companionOnMac`]).
  */
 export interface CompanionWords {
   sections: Record<SectionId, string>
@@ -221,6 +225,31 @@ export interface CompanionWords {
     button: string
     note: string
   }
+  /** On macOS, in place of the words above that are Windows' ([`companionOnMac`]). */
+  mac: CompanionMacWords
+}
+
+/** What macOS says its own way (as the onboarding's `MacWords`): a game WestPlay is kept out of runs as another
+ * user (as root, say: WestPlay looks at the game's owner), and the administrator's password is what's asked for. */
+export interface CompanionMacWords {
+  /** `screen.elevated` */
+  elevated: { title: string; text: string }
+  /** `uninstall.asAdministrator` */
+  uninstall: string
+  /** `update.finish.text` */
+  finishUpdate: string
+}
+
+/** `words` as the Mac says them: [`CompanionMacWords`] in place of Windows', and WebKit for WebView2. */
+export function companionOnMac(words: CompanionWords): CompanionWords {
+  const { mac, screen, uninstall, about, update } = words
+  return {
+    ...words,
+    screen: { ...screen, elevated: mac.elevated },
+    uninstall: { ...uninstall, asAdministrator: mac.uninstall },
+    about: { ...about, webview: 'WebKit' },
+    update: { ...update, finish: { ...update.finish, text: mac.finishUpdate } },
+  }
 }
 
 export interface UninstallWords {
@@ -272,9 +301,16 @@ const WORDS: Record<string, CompanionWords> = Object.fromEntries(
   ),
 )
 
-/** The companion's words in the game's language `code` (`tr_tr`), English for one without. */
+const ON_MAC = new Map<string, CompanionWords>()
+
+/** The companion's words in the game's language `code` (`tr_tr`), English for one without, as the system says
+ * them ([`SYSTEM`]). */
 export function companionWords(code: string): CompanionWords {
-  return WORDS[code] ?? WORDS.en_us
+  const words = WORDS[code] ?? WORDS.en_us
+  if (SYSTEM !== 'mac') return words
+  let mac = ON_MAC.get(code)
+  if (!mac) ON_MAC.set(code, (mac = companionOnMac(words)))
+  return mac
 }
 
 export function companionLanguages(): string[] {

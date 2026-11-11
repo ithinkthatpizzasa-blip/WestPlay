@@ -311,4 +311,12 @@ export const words: CompanionWords = {
     button: 'Tue Kreosuksessa',
     note: 'Avaa Kreosuksen selaimessasi.',
   },
+  mac: {
+    elevated: {
+      title: 'Peli on käynnissä toisena käyttäjänä',
+      text: 'Silloin WestPlay ei näe sen reittiä, opastusta eikä säätä. Käynnistä peli tavallisesti, omana käyttäjänäsi.',
+    },
+    uninstall: 'Poista salasanalla',
+    finishUpdate: 'Uuden WestPlayn laajennus asennetaan peliisi. macOS kysyy salasanaasi kuten asennuksessa.',
+  },
 }

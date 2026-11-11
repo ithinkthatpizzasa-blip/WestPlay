@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HVT_MAP_MESSAGES } from '../../../cabin/maps/blockedMap'
-import { count, languageOf, languages, type Plural, type Words, wordsFor } from '.'
+import { offeredKeys } from '../../system'
+import { count, languageOf, languages, onMac, type Plural, type Words, wordsFor } from '.'
 
 /** Every count's words in `words`. */
 function plurals(words: Words): [string, Plural][] {
@@ -66,5 +67,50 @@ describe('the onboarding’s words', () => {
     // A language the game doesn't have: the next one Windows lists, else English.
     expect(languageOf(['xh-ZA', 'de-DE'])).toBe('de_de')
     expect(languageOf(['xh-ZA'])).toBe('en_us')
+  })
+})
+
+describe('the onboarding’s words on the Mac', () => {
+  it.each(languages())('%s names nothing of Windows’, its own words in their place', (code) => {
+    const windows = wordsFor(code)
+    const before = JSON.stringify(windows)
+    const words = onMac(windows)
+    // Windows' own are left as they were.
+    expect(JSON.stringify(windows)).toBe(before)
+    for (const [path, text] of texts({ ...words, mac: null })) expect(text, `${code} ${path}`).not.toMatch(/Windows/)
+    // The keys' names ("Alt" is also Danish and Norwegian for "all").
+    for (const [path, text] of texts(words.controls)) expect(text, `${code} ${path}`).not.toMatch(/\b(Alt|Ctrl|Strg)\b/)
+    const { mac, install, controls } = words
+    expect(install.asAdministrator).toBe(mac.asAdministrator)
+    expect(install.banners.permission).toEqual({
+      title: windows.install.banners.permission.title,
+      text: mac.permission,
+    })
+    expect(install.needsAdministrator.text).toBe(mac.needsAdministrator)
+    expect(install.declined.text).toBe(mac.declined)
+    expect(install.noDocuments).toBe(mac.noDocuments)
+    // The install step's line when the mod is kept in Mod Manager names the mod.
+    expect(mac.inModManager, code).toContain('westplay.scs')
+    expect(controls.keys).toEqual({ ...windows.controls.keys, ...mac.keys })
+    expect([controls.alt, controls.ctrl]).toEqual(['⌥', '⌃'])
+    // Each says it its own way, not Windows' words again.
+    const windowsTexts = texts({ ...windows, mac: null }).map(([, text]) => text)
+    for (const [path, text] of texts(mac)) expect(windowsTexts, `${code} mac.${path}`).not.toContain(text)
+  })
+})
+
+describe('the keys offered to hold', () => {
+  it('are right Option on the Mac where Windows has Right Ctrl, which most Macs don’t have', () => {
+    expect(offeredKeys('windows')).toEqual(['leftAlt', 'rightCtrl', 'mouseBack', 'mouseForward'])
+    expect(offeredKeys('mac')).toEqual(['leftAlt', 'rightAlt', 'mouseBack', 'mouseForward'])
+  })
+
+  it.each(languages())('%s names each on its system', (code) => {
+    const windows = wordsFor(code)
+    for (const key of offeredKeys('windows')) expect(windows.controls.keys[key], key).toBeTruthy()
+    // Right Alt is Windows' to name there (it isn't offered): as before.
+    expect(windows.controls.keys.rightAlt).toBeUndefined()
+    const mac = onMac(windows)
+    for (const key of offeredKeys('mac')) expect(mac.controls.keys[key], key).toBeTruthy()
   })
 })

@@ -310,4 +310,12 @@ export const words: CompanionWords = {
     button: 'Podpri na Kreosusu',
     note: 'Odpre Kreosus v tvojem brskalniku.',
   },
+  mac: {
+    elevated: {
+      title: 'Igra teče kot drug uporabnik',
+      text: 'Tako WestPlay ne vidi njene poti, navodil in vremena. Zaženi igro običajno, s svojim uporabnikom.',
+    },
+    uninstall: 'Odstrani z geslom',
+    finishUpdate: 'Vtičnik novega WestPlaya gre v tvojo igro. macOS te vpraša za geslo, kot pri namestitvi.',
+  },
 }

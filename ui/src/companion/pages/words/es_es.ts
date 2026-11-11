@@ -315,4 +315,13 @@ export const words: CompanionWords = {
     button: 'Apoyar en Kreosus',
     note: 'Abre Kreosus en tu navegador.',
   },
+  mac: {
+    elevated: {
+      title: 'El juego se está ejecutando como otro usuario',
+      text: 'Así WestPlay no ve su ruta, sus indicaciones ni el tiempo. Inicia el juego normalmente, con tu usuario.',
+    },
+    uninstall: 'Desinstalar con contraseña',
+    finishUpdate:
+      'El plugin del nuevo WestPlay se instala en tu juego. macOS te pide la contraseña, como cuando lo instalaste.',
+  },
 }

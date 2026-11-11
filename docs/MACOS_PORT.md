@@ -729,3 +729,93 @@ build (`cargo build --release -p westplay-host`, `target/release/westplay-host`)
   30–35 fps: 17–19 frames a second sent, each written into the screen in 1.1 ms (the plugin's log). Owner: "smooth
   enough". Still short of a video's 25–30: a round snapshots every WebView shown and composites them on the main
   thread; snapshotting the cabin page only when it changes would leave the player's alone in most rounds.
+
+## Phase 4: the companion app and shipping
+
+### The companion's words on the Mac (2026-11-03)
+
+The companion named things Windows' way on the Mac too: "Install as Administrator", "Windows will ask once… Choose
+Yes", "Your Documents folder couldn't be found", the keys "Left Alt"/"Right Ctrl" on Alt and Ctrl keycaps, "WebView2"
+and `Documents\WestPlay\logs\plugin.log` on the About page. Now it says the Mac's, in all 43 languages; Windows' words
+are byte for byte as they were (only lines added to the words files).
+- **Which system** (`ui/src/companion/system.ts`): the WebView's user agent (WebKit's says Macintosh, WebView2's
+  Windows), no Tauri command needed. The preview takes `?system=mac` or `?system=windows` (else the browser's), and
+  shows the Mac's paths, WebKit's version and key names with it.
+- **The words**: each language's words have a `mac` part (`MacWords` in `onboarding/words`, `CompanionMacWords` in
+  `pages/words`: required, so no language can leave one out), put in place of Windows' by `wordsFor` and
+  `companionWords` on the Mac (`onMac`, `companionOnMac`). English, as the others say it in their own style:
+  - the administrator's path (a game folder an administrator owns: `osascript … with administrator privileges`):
+    "Install with Password" / "Uninstall with Password", "macOS will ask for your password", "Your game is in a
+    protected folder. macOS will ask for your password once, only to copy the plugin.", "…Try again and enter your
+    password.", and the update's "macOS asks for your password, as when you installed it.";
+  - `noDocuments`: "Your Application Support folder couldn't be found." (WestPlay's folder is there on the Mac);
+  - the keys: "Left Option", "Right Option", "Right Control" (Apple's own names where a language has them:
+    Wahltaste, Opción, Opzione, Opção, Tilvalg, Alternativ, Optio, Contrôle…; "Option"/"Control" elsewhere), on ⌥
+    and ⌃ keycaps (every Mac keyboard has the symbols, whatever words it prints); other keys' names were already the
+    Mac's (the host's `key_name`);
+  - the game kept out of WestPlay's reach: on the Mac the host reports it when the game runs as another user (root,
+    say: `os/macos.rs is_elevated`), so it says "The game is running as another user… Start the game normally, as
+    yourself." rather than "as administrator";
+  - About: "WebKit" with Safari's version, `~/Library/Application Support/WestPlay/logs/plugin.log`; the copied
+    report says `WebView:` and `macOS:`.
+- Tests: every language on the Mac names nothing of Windows (no "Windows", "WebView2", Alt, Ctrl or Strg in its keys),
+  each Mac word is in its place and none is Windows' word again, and Windows' words are left untouched
+  (`words.test.ts`, both; `system.test.ts`). Seen in the preview with `?system=mac`: the install step after the
+  game's folder refused ("Install with Password", the note, the screen's "macOS will ask for your password"), the
+  update sheet, Controls (⌥ Left Option, ⌃ Right Control, "Left Option + 1"), About; and `?system=windows` as before.
+- **Right Option in place of Right Control** (owner, 2026-11-03): most Macs have no right Control key (no MacBook's
+  keyboard, nor Apple's), so the Mac offers left Option, right Option (0xA5, which the plugin already takes for
+  `kVK_RightOption`) and the mouse's two side buttons (`offeredKeys` in `system.ts`); Windows' four are as they were.
+  Right Control set before still works and is named, it just isn't offered. Only the Mac's words name right Option
+  (`mac.keys.rightAlt`): on Windows 0xA5 is still named by Windows. Seen in the preview: chosen, it's "Right Option"
+  everywhere ("Right Option + 1" in the keybinds).
+- **The mod kept in Mod Manager** (2026-11-03): the install step said "…nothing to turn on in Mod Manager", wrong
+  where the player keeps westplay.scs in the game's `mod` folder, switched on in the Mod Manager (the owner's Mac:
+  setup keeps that copy up to date and leaves the profiles alone). When the check says so (`GameCheck.modInModManager`),
+  the step says instead, in each language with the game's own name for its Mod Manager: "WestPlay adds a plugin to your
+  game and keeps its truck screens up to date in its mod, westplay.scs, which you have on in Mod Manager. Your game's
+  own files stay untouched, and uninstalling WestPlay removes it all." (`mac.inModManager`). Preview: `?modManager`.
+- The translations other than English are, as before, without a native speaker's review.
+
+### Setup in the companion on the Mac (2026-11-03)
+
+**The screen mod stays where the player keeps it.** Install built the mod into WestPlay's own folder and then took
+WestPlay 1.2's copy out of the game's `mod` folder and out of every profile's active mods (Windows' clean-up). On the
+owner's Mac that copy is theirs: `westplay.scs` in `~/Library/Application Support/Euro Truck Simulator 2/mod/`,
+switched on in the Mod Manager (and the plugin mounts nothing while it's there). Owner, asked: setup may make it again
+in place, never move or take it out. So on macOS (`game_mod::home`): when `mod/westplay.scs` is there, setup and the
+installed mods' watcher write the mod there (same name, same folder: the Mod Manager's switch is untouched), and
+the 1.2 clean-up is skipped (no copy taken out, no profile changed). With no copy there, WestPlay's own folder, as
+on Windows, for the plugin to mount; and if the player takes their copy out later, the watcher makes WestPlay's own.
+`tablet_apart.txt` stays in WestPlay's folder, where the plugin reads it. Windows unchanged.
+
+**The tested version.** The onboarding said "WestPlay was built for version 1.61. Yours hasn't been tested yet" for
+the Mac's 1.57.2.7: on macOS the tested versions are now `1.57.*` (`game::TESTED_VERSIONS`); seen with a tick.
+
+**Run through the onboarding** (debug-built app in a hand-made `.app`, the UI's dev server; the game closed):
+- The window showed 1.9 s after start (the first page drawn).
+- "Your game": Steam's, 1.57.2.7, 102 DLCs, "…on this computer."
+- "Here's your setup": 102 DLCs, the 9 map DLCs, the trucks (DAF XF/XG/XF Electric/XD, both Scania 7" and the Smart
+  Dash, Iveco S-Way, Volvo FH 2021/2024 ticked; Jasper's DAF and Oyuncuyusbis' coaches "Mod not installed"; Renault
+  T 2024 "Not supported yet"), the three profiles (the owner's with ProMods' seven packs).
+- Install (owner's go-ahead; the app given the plugin already in the game, so its bytes matched and nothing was
+  copied): "WestPlay is installed". The mod written to `…/Euro Truck Simulator 2/mod/westplay.scs` (1,674,078 bytes;
+  was 1,532,838, built 2026-11-02), nothing in WestPlay's folder but `tablet_apart.txt`; the plugin's bytes unchanged;
+  no `profile.sii` changed.
+- Its words still said "nothing to turn on in Mod Manager", which isn't so for a player keeping the mod there: the
+  check now says so (`mod_in_mod_manager`) and the step has the Mac's words for it (above; not seen in the app yet).
+- The map step: the app keeps its maps in `~/Library/Application Support/app.westplay/maps` (its local data folder,
+  as `%LOCALAPPDATA%\app.westplay\maps` on Windows); the stand-in's standalone host kept them in
+  `~/Library/Application Support/WestPlay/maps`, so the app built its own: the owner's ProMods profile's in 484 s with
+  the debug build (149 MB, "Your map is ready"), then the plain map for the other two. The stand-in's ~300 MB there are
+  left over once it's retired (the owner's to remove).
+- "Hold to use the screen": ⌥ Left Option (chosen), ⌃ Right Control, the mouse's side buttons.
+- YouTube (skipped) and Spotify: "Not signed in": the app's WebKit data is its own, not the stand-in host's, so the
+  owner signs in to Spotify once more in the app. Apple Music not looked at (the owner doesn't use it).
+- Not seen yet: the onboarding's last steps (Apple Music, the tutorial), the companion's own pages after it, and
+  uninstall. The app was stopped from outside at 21:13 (SIGTERM, not this session's doing), with another WestPlay
+  started from the main checkout.
+- Meanwhile (not this session's run): `setup.json` says the onboarding was finished at 15:38, and an app started at
+  16:07 drew WestPlay on the truck's screen in the game until 16:21 (`app.log`: "game: connected", "drawing WestPlay
+  on the truck's screen", 81 performance lines, the game 24–41 fps); `westplay.scs` was made again in the `mod`
+  folder at 16:04 (same size), the plugin's bytes unchanged.

@@ -310,4 +310,13 @@ export const words: CompanionWords = {
     button: 'Atbalstīt Kreosus',
     note: 'Atver Kreosus tavā pārlūkā.',
   },
+  mac: {
+    elevated: {
+      title: 'Spēle darbojas kā cits lietotājs',
+      text: 'Tad WestPlay neredz tās maršrutu, norādes un laikapstākļus. Palaid spēli parasti, no sava konta.',
+    },
+    uninstall: 'Atinstalēt ar paroli',
+    finishUpdate:
+      'Jaunā WestPlay spraudnis tiek ievietots tavā spēlē. macOS pajautās tavu paroli, tāpat kā instalējot.',
+  },
 }

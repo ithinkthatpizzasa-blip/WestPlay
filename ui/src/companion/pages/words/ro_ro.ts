@@ -311,4 +311,12 @@ export const words: CompanionWords = {
     button: 'Susține pe Kreosus',
     note: 'Deschide Kreosus în browserul tău.',
   },
+  mac: {
+    elevated: {
+      title: 'Jocul rulează ca alt utilizator',
+      text: 'Așa, WestPlay nu îi vede traseul, indicațiile și vremea. Pornește jocul normal, cu utilizatorul tău.',
+    },
+    uninstall: 'Dezinstalează cu parolă',
+    finishUpdate: 'Pluginul noului WestPlay intră în jocul tău. macOS îți cere parola, ca la instalare.',
+  },
 }
