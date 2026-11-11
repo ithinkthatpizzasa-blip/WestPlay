@@ -985,3 +985,32 @@ fails if the plugin in the app isn't the one built.
     change not yet made: the game started 20 s into it and the build was stopped). Notarization skipped, as Tauri says, without
     Apple's account.
 - Not opened: opening the built app starts WestPlay (ask the owner first; one WestPlay at a time).
+
+## Where the port stands (2026-11-11)
+
+The work done on side branches is one branch again: `claude/mac-weather-camera`, `claude/mac-go-end-route`,
+`claude/mac-phase-4` (with its words) and `claude/mac-phase-4-bundle` are merged into
+`claude/beautiful-goodall-7v9ss6`, with the capture's change below. Checked on the merged branch, on this Mac:
+`cargo test` for the workspace (shared 30, mapdata 163, setup 72, host 198, the app's) and the plugin's 28
+(x86_64, its searches run on the game's own executable); the UI's 584 tests and its type check; clippy (only 1.99's
+`as_chunks` suggestions in files the port didn't write); `cargo xwin check --workspace --all-targets` for Windows.
+Windows' tests still can't run from here.
+
+**The capture (host).** A WebView whose page was the same in its last two snapshots isn't snapshotted again until the
+host does something to it (input, a message, a load, a move) or 250 ms have passed, so with a video playing a round
+snapshots the player alone; and the Mac publishes 30 frames a second at most (the game takes 30–40). The release
+host on its test page, no game: 30 frames a second sent, steadily. With a video in the cabin and the game running:
+not measured since the change.
+
+**Not tried in the game since they were written** (each needs the owner in the game):
+- Go, End route and Follow from the cabin's Maps (the hand-over now waits for the game's route to reach the
+  destination on the Mac; reads of a long route no longer time out).
+- The plugin built from the merged branch (the camera's and the route's together); it's the one in the game now
+  (SHA-256 `b6e19d9f…`).
+- YouTube's sound with the camera outside the cab (it didn't change, 2026-11-03), and the cab's speakers at all.
+- The final acceptance list of the brief: the tablet in another truck, light/dark with the headlights, keybinds,
+  wallpapers and icons, the Vehicle Bar, captions and quality, `sdk reload`/`sdk unload`, uninstall and reinstall.
+- The built `WestPlay.app` opened and used in place of `Start WestPlay.command`.
+
+**The owner's alone:** a Developer ID and notarization for a release (Shipping on the Mac), the updater's key,
+and whether to open a pull request.
