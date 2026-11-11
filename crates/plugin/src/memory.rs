@@ -17,6 +17,10 @@ use crate::{bridge, log};
 
 /// How often the thread looks for a request while none comes.
 const IDLE: Duration = Duration::from_millis(2);
+/// How long after a request the thread keeps looking for the next without sleeping: the app reads a route a map node
+/// at a time (thousands of reads for a long one), each asked the moment the last is answered; a 2 ms sleep between
+/// them made a route of 1,100 miles take longer than the cabin waits (2026-11-03).
+const BUSY: Duration = Duration::from_millis(50);
 
 static STOP: AtomicBool = AtomicBool::new(false);
 static THREAD: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
@@ -58,12 +62,18 @@ fn serve() {
     let Some(bridge) = bridge::get() else { return };
     let block = &bridge.memory;
     let mut reads = 0u64;
+    let mut last = std::time::Instant::now() - BUSY;
     while !STOP.load(Ordering::Acquire) {
         let request = block.request.load(Ordering::Acquire);
         if request == block.answered.load(Ordering::Acquire) {
-            std::thread::sleep(IDLE);
+            if last.elapsed() < BUSY {
+                std::thread::yield_now();
+            } else {
+                std::thread::sleep(IDLE);
+            }
             continue;
         }
+        last = std::time::Instant::now();
         let address = block.address.load(Ordering::Acquire);
         let length = (block.length.load(Ordering::Acquire) as usize).min(MEMORY_READ_MAX);
         let mut read = 0u64;

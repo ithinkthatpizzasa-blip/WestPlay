@@ -95,6 +95,51 @@ pub unsafe fn give(game: &Game, navigator: *mut u8, planned: &Planned) {
     }
 }
 
+/// Logs what the navigator holds (its mode and three lists, each target's first fields, node and node uid) when
+/// it changes: what 1.57 makes of a route without a job.
+///
+/// # Safety
+/// On the game's main thread, `game` as `locate` found it.
+pub unsafe fn watch(game: &Game) {
+    static SEEN: std::sync::Mutex<String> = std::sync::Mutex::new(String::new());
+    // SAFETY: the navigator as `change` reads it; a list's entries read only when its count is plausible and its
+    // data set, a node's uid only from a target that says it's a map node (type 2) with its node set.
+    let now = unsafe {
+        let core = *game.core;
+        if core.is_null() {
+            return;
+        }
+        let navigator = core.add(game.navigator);
+        let list = |at: usize| {
+            let list = &*(navigator.add(at) as *const List);
+            if list.count > super::MAX_TARGETS || (list.count > 0 && list.data.is_null()) {
+                return format!("{at:#x}: count {}?", list.count);
+            }
+            let entries: Vec<String> = std::slice::from_raw_parts(list.data, list.count as usize)
+                .iter()
+                .map(|target| {
+                    let field = |i: usize| u32::from_le_bytes(target[i..i + 4].try_into().unwrap());
+                    let node = super::node_of(target);
+                    let uid = if field(16) == 2 && node != 0 {
+                        format!("{:#x}", ((node + NODE_UID) as *const u64).read_unaligned())
+                    } else {
+                        "-".into()
+                    };
+                    format!("{{{:#x} {:#x} {node:#x} {} uid {uid}}}", field(0), field(4), field(16))
+                })
+                .collect();
+            format!("{at:#x}: [{}]", entries.join(", "))
+        };
+        let mode = (navigator.add(MODE) as *const u32).read();
+        format!("mode {mode}, {}, {}, {}", list(FIRST), list(ROUTE), list(AVOID))
+    };
+    let mut seen = SEEN.lock().unwrap_or_else(|e| e.into_inner());
+    if *seen != now {
+        log!("route: navigator now {now}");
+        *seen = now;
+    }
+}
+
 /// The start of the navigator's "set targets": its frame, the third list kept (`mov [rbp-30h], r8`), the mode
 /// (`mov [rdi+1B0h], esi`), the first list's place (`add rdi, 1B8h`) and whether it's the navigator's own
 /// (`cmp rdi, rdx`).

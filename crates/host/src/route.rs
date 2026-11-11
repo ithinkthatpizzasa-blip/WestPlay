@@ -20,6 +20,7 @@
 //! Worked out on version 1.61.1.1; what's read is checked (a sane count, nodes where they should be), and
 //! a layout that doesn't add up after a game update reads as no route.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -222,9 +223,18 @@ impl RouteReader {
         if self.route.as_ref().map(|(seen, _, _)| *seen) != Some(key) {
             // A new route that doesn't read (it doesn't add up): no route. One that reads differently twice
             // (still being written): looked at again next time.
-            let (Some(first), Some(again)) = (read_nodes(memory, &header), read_nodes(memory, &header)) else {
+            // The map nodes don't change as the route is written: each read once for both (on the Mac each is a
+            // read through the plugin: thousands for a long route).
+            let mut map_nodes = HashMap::new();
+            let started = Instant::now();
+            let (Some(first), Some(again)) =
+                (read_nodes(memory, &header, &mut map_nodes), read_nodes(memory, &header, &mut map_nodes))
+            else {
                 return self.lost();
             };
+            if started.elapsed() > Duration::from_secs(1) {
+                log!("route: {} nodes read in {:.1} s", header.count, started.elapsed().as_secs_f32());
+            }
             if first != again {
                 return updates;
             }
@@ -340,7 +350,12 @@ fn read_waypoints(memory: &impl Memory, global: usize, navigator: usize) -> Opti
 
 /// The route's map nodes, and for each of its nodes in memory, the map node at or after it (where the truck
 /// is along the map nodes when it's at that node); `None` without any, or if what's read doesn't add up.
-fn read_nodes(memory: &impl Memory, header: &Header) -> Option<(Vec<RouteNode>, Vec<usize>)> {
+/// `map_nodes`: those already read, by where they are.
+fn read_nodes(
+    memory: &impl Memory,
+    header: &Header,
+    map_nodes: &mut HashMap<usize, [u8; MAP_NODE_SIZE]>,
+) -> Option<(Vec<RouteNode>, Vec<usize>)> {
     let mut raw = vec![0u8; header.count * NODE_SIZE];
     if !memory.read(header.array, &mut raw) {
         return None;
@@ -353,10 +368,17 @@ fn read_nodes(memory: &impl Memory, header: &Header) -> Option<(Vec<RouteNode>, 
         match u32::from_le_bytes(node[0..4].try_into().unwrap()) {
             0 => {
                 let pointer = u64::from_le_bytes(node[8..16].try_into().unwrap()) as usize;
-                let mut map_node = [0u8; MAP_NODE_SIZE];
-                if !memory.read(pointer, &mut map_node) {
-                    return None;
-                }
+                let map_node = match map_nodes.get(&pointer) {
+                    Some(map_node) => *map_node,
+                    None => {
+                        let mut map_node = [0u8; MAP_NODE_SIZE];
+                        if !memory.read(pointer, &mut map_node) {
+                            return None;
+                        }
+                        map_nodes.insert(pointer, map_node);
+                        map_node
+                    }
+                };
                 let distance_left =
                     f32::from_le_bytes(node[ROUTE_NODE_DISTANCE..ROUTE_NODE_DISTANCE + 4].try_into().unwrap());
                 nodes.push(RouteNode { distance_left, ..map_node_of(&map_node) });
@@ -552,7 +574,13 @@ impl Memory for Process {
                 if asked.elapsed() > MEMORY_ANSWER {
                     return false;
                 }
-                std::thread::sleep(Duration::from_micros(200));
+                // Most are answered within microseconds (the plugin keeps looking while reads come): a sleep would
+                // be most of each read's time.
+                if asked.elapsed() < Duration::from_millis(2) {
+                    std::thread::yield_now();
+                } else {
+                    std::thread::sleep(Duration::from_micros(200));
+                }
             }
             if block.ok.load(Ordering::Acquire) != 1 {
                 return false;
@@ -856,12 +884,12 @@ mod tests {
     use std::cell::Cell;
     use std::collections::BTreeMap;
 
-    /// A stand-in for the game's memory: blocks of bytes at addresses. `shaky` changes one map node's
-    /// position on every read of it (a route the game is still writing).
+    /// A stand-in for the game's memory: blocks of bytes at addresses. `shaky` (an address, and an offset in what's
+    /// read from it) changes four bytes on every read of it (a route the game is still writing).
     #[derive(Default)]
     struct FakeMemory {
         blocks: BTreeMap<usize, Vec<u8>>,
-        shaky: Option<usize>,
+        shaky: Option<(usize, usize)>,
         reads: Cell<u32>,
     }
 
@@ -871,10 +899,12 @@ mod tests {
             let at = address - start;
             let Some(bytes) = block.get(at..at + buffer.len()) else { return false };
             buffer.copy_from_slice(bytes);
-            if self.shaky == Some(address) {
+            if let Some((shaky, offset)) = self.shaky
+                && shaky == address
+            {
                 let read = self.reads.get() + 1;
                 self.reads.set(read);
-                buffer[0..4].copy_from_slice(&(read as i32 * 256).to_le_bytes());
+                buffer[offset..offset + 4].copy_from_slice(&(read as f32 * 256.0).to_le_bytes());
             }
             true
         }
@@ -992,7 +1022,8 @@ mod tests {
     fn a_route_still_being_written_is_left_until_it_reads_the_same_twice() {
         let mut reader = RouteReader::default();
         let mut memory = navigator(9, &[0, 0], 0, 9);
-        memory.shaky = Some(MAP_NODES);
+        // The first node's distance left, as the game writes the route (the map nodes themselves never change).
+        memory.shaky = Some((ARRAY, ROUTE_NODE_DISTANCE));
         assert!(poll(&mut reader, &memory).is_empty());
         memory.shaky = None;
         assert_eq!(summary(&poll(&mut reader, &memory)), ["route 1: 2 nodes", "next 0"]);
