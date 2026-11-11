@@ -932,7 +932,7 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
                             let handover = handover::Handover::new(picked, roads, &positions);
                             // The last hand-over's waypoints go as this one sets the game's (without them).
                             held_vias.clear();
-                            following = Some(Following { id, handover, positions, answered: None });
+                            following = Some(Following { id, handover, positions, answered: None, unfinished: None });
                         }
                         _ => {
                             let _ = webview.post_json(&followed_message(id, false, "unexpected"));
@@ -969,12 +969,24 @@ pub fn run(mut config: Config, stop: Arc<AtomicBool>) -> Result<(), Error> {
         if let Some(follow) = following.as_mut()
             && let Some((since, before)) = follow.answered
         {
+            let end = *follow.handover.picked().last().unwrap_or(&0);
+            // The game's route once it reaches the destination: the Mac game (1.57) plans it over a few frames, and a
+            // route read before then ends short of it (2026-11-03: 863 nodes of 1,130, read as leaving the route
+            // picked where it ended). Windows' is read as it always was.
+            let planned = route_uids.as_ref().filter(|game| !cfg!(target_os = "macos") || game.contains(&end));
+            if route_number != before && route_uids.is_some() && planned.is_none() && follow.unfinished != route_number
+            {
+                follow.unfinished = route_number;
+                log!(
+                    "route handed over: the game's route ({} nodes) doesn't reach the destination yet",
+                    route_uids.as_ref().map_or(0, Vec::len)
+                );
+            }
             if route_number != before
-                && let Some(game) = &route_uids
+                && let Some(game) = planned
             {
                 let step = follow.handover.read(game);
                 let picked = follow.handover.picked();
-                let end = picked[picked.len() - 1];
                 let block = &bridge.bridge().route;
                 match step {
                     handover::Step::Follows => {
@@ -1883,6 +1895,8 @@ struct Following {
     handover: handover::Handover,
     positions: Vec<[f32; 2]>,
     answered: Option<(Instant, Option<u32>)>,
+    /// The game's route last read short of the destination (said once).
+    unfinished: Option<u32>,
 }
 
 /// Marks a route request as the hand-over's own (its answer isn't the page's).
